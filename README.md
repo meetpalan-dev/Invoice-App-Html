@@ -48,6 +48,12 @@ This single `.html` file solves all of that.
 
 No npm. No build step. No server. Just one file.
 
+<img width="1920" height="916" alt="image" src="https://github.com/user-attachments/assets/1aad7cf1-3bc7-40e7-a57a-9ded84ab3d80" />
+<img width="1894" height="919" alt="image" src="https://github.com/user-attachments/assets/56f17628-6c41-4d7f-9227-4c658492f1e4" />
+<img width="564" height="845" alt="image" src="https://github.com/user-attachments/assets/d7a5869a-4b59-43b5-ab84-e21818610876" />
+
+
+
 ---
 
 ## 🏗 Tech Stack
