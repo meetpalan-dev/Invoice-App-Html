@@ -1,149 +1,203 @@
 [README.md](https://github.com/user-attachments/files/27055585/README.md)
-# 🧾 Company Invoice App
+# 🧾 GST Invoice App
 
-A lightweight, **single-file** GST-compliant invoice management app built with React — no server, no installation, no heavy ERP required. Runs entirely in the browser.
+> A zero-dependency, single-file GST-compliant invoice manager — built with React, runs entirely in the browser.
+
+![HTML](https://img.shields.io/badge/HTML-Single%20File-orange?style=flat-square&logo=html5)
+![React](https://img.shields.io/badge/React-18-blue?style=flat-square&logo=react)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Offline](https://img.shields.io/badge/Offline-Ready-brightgreen?style=flat-square)
+![No Build](https://img.shields.io/badge/Build%20Step-None-lightgrey?style=flat-square)
 
 ---
 
-## 🎯 Why This Exists
+## 📌 Background
 
-The client was managing invoices in old-school Excel spreadsheets. Their system couldn't handle heavy invoice software or cloud-based ERPs, and they needed something:
+A client in the **port & shipping services industry** was managing all their invoices in Excel. Their system couldn't run heavy ERP software, and cloud-based tools were overkill. They needed something:
 
-- Fast and lightweight
-- Works offline after first load
-- Printable as proper GST Tax Invoices (A4, Original + Duplicate)
-- Exportable to Excel for accountants
-- Runs on any device — desktop, tablet, or mobile
+- That runs on any device, including older machines
+- Works without internet after the first load
+- Produces proper **GST Tax Invoices** ready to print or share as PDF
+- Exports to Excel for their accountant
 
-This single `.html` file solves all of that.
+The result: one `.html` file. Download it. Open it. Done.
 
 ---
 
 ## ✨ Features
 
-- **GST-Compliant Tax Invoices** — SGST/CGST and IGST support, auto-calculations
-- **Auto Invoice Numbering** — format: `NNN/MM/YY-YY` (serial/month/fiscal year), resets each FY
-- **Print Ready** — A4 portrait, Original + Duplicate on one print job
-- **Excel Export** — Summary report, Line Items, GST summary sheets; or Full Report (one row per item)
-- **JSON Backup & Restore** — auto-backup on every save, manual backup anytime, merge-import
-- **Offline Support** — Service Worker caches CDN scripts after first load
-- **Dark Mode** — persisted across sessions
-- **Party & Vessel Autocomplete** — learns from your own invoices
-- **Port of Service Dropdown** — all major Indian ports pre-loaded + custom option
-- **3-Layer Storage** — IndexedDB (primary) + localStorage (mirror) + optional linked JSON file
-- **Undo** — up to 4 steps back
-- **Logo Upload** — appears on invoice header and Excel exports
-- **Configurable date format** — DD/MM/YYYY or YYYY-MM-DD
+### 🧾 Invoicing
+- GST-compliant Tax Invoices — **SGST+CGST** (intra-state) and **IGST** (inter-state) with auto-calculation
+- **Auto invoice numbering** in `NNN/MM/YY-YY` format (serial / month / fiscal year), resets every April
+- Billing party + separate Consignee support
+- Vessel / Ship name, Port of Service, Job No., PO No., E-Way Bill fields — built for port & logistics workflows
+- Reverse charges, insurance, freight, rounding off
+- Multi-currency support with exchange rate
+- Custom remarks / notes section
+
+### 🖨 Print & Export
+- **A4 print** — Original + Duplicate on one job, no extra clicks
+- **PDF export** via html2pdf
+- **Excel Summary** — 3 sheets: Invoice Summary, Line Items, GST breakup
+- **Full Excel Report** — every field, one row per item (great for accountants)
+- **JSON backup** — full data export, re-importable
+
+### 💾 Storage & Backup
+- **3-layer storage**: IndexedDB (primary) → localStorage (mirror) → optional linked local JSON file
+- **Auto-backup** on every save — JSON file downloads automatically
+- **Merge import** — restore from any backup without overwriting existing data
+- Up to **4-step undo**
+
+### 🎨 UI
+- Dark mode (persisted)
+- Logo upload — appears on invoice header and in Excel exports
+- Party & vessel **autocomplete** — learns from your own invoice history
+- Configurable date format: `DD/MM/YYYY` or `YYYY-MM-DD`
+- Fully responsive — works on mobile and tablet
+
+### 📡 Offline
+- Service Worker caches CDN scripts on first load
+- After that, works **completely offline**
 
 ---
 
 ## 🚀 Getting Started
 
-1. Download `invoice_app.html`
-2. Open it in any modern browser (Chrome, Edge, Firefox)
-3. First open requires internet to load React/Babel from CDN — after that it works offline
-4. Go to ⚙ **Settings** → fill in your company name, address, GSTIN, bank details
-5. Upload your logo
-6. Hit **+ New Invoice** and you're set
+**No installation. No npm. No build step.**
 
-No npm. No build step. No server. Just one file.
+```
+1. Download invoice_app.html
+2. Open in Chrome, Edge, or Firefox
+3. First open needs internet (loads React + libs from CDN)
+4. After that — fully offline
+```
 
-<img width="1920" height="916" alt="image" src="https://github.com/user-attachments/assets/1aad7cf1-3bc7-40e7-a57a-9ded84ab3d80" />
-<img width="1894" height="919" alt="image" src="https://github.com/user-attachments/assets/56f17628-6c41-4d7f-9227-4c658492f1e4" />
-<img width="564" height="845" alt="image" src="https://github.com/user-attachments/assets/d7a5869a-4b59-43b5-ab84-e21818610876" />
-
-
+On first launch:
+1. Go to **⚙ Settings**
+2. Fill in your company name, address, GSTIN, PAN, bank details
+3. Upload your logo
+4. Hit **＋ New Invoice**
 
 ---
 
 ## 🏗 Tech Stack
 
-| Layer | Tech |
+| Layer | Technology |
 |---|---|
-| UI Framework | React 18 (CDN, no build) |
-| Transpiler | Babel Standalone |
+| UI Framework | React 18 (UMD build, no bundler) |
+| JSX Transpiler | Babel Standalone |
 | PDF Export | html2pdf.js |
-| Excel Export | SheetJS (XLSX) — custom OOXML builder for styled output |
+| Excel Export | SheetJS + custom OOXML builder (styled .xlsx) |
 | Storage | IndexedDB + localStorage |
-| Offline | Service Worker (inline blob SW) |
-| Styling | Pure CSS with CSS variables (dark mode support) |
+| Offline | Inline blob Service Worker |
+| Styling | Vanilla CSS with CSS custom properties |
+
+Everything is loaded from CDN on first use and cached by the Service Worker. Zero local dependencies.
 
 ---
 
-## 📁 File Structure
+## 📁 Repo Structure
 
 ```
-invoice_app.html     ← The entire app. Everything in one file.
+invoice_app.html    ← The entire app (~3000 lines, self-contained)
 README.md
 ```
 
 ---
 
-## 🖨 Invoice Format
+## 🖨 Invoice Layout
 
-Each print produces **two copies** on one A4 sheet:
-- **Page 1** — ORIGINAL
-- **Page 2** — DUPLICATE
+Each print run produces **two copies on one A4 sheet**:
 
-Both include: company header, billing & consignee details, itemized table with HSN/SAC, GST breakup, and jurisdiction line.
+| | |
+|---|---|
+| **Page 1** | ORIGINAL |
+| **Page 2** | DUPLICATE |
+
+Both pages include: company letterhead + logo, billing & consignee details, itemised service/goods table with HSN/SAC codes, GST summary, and jurisdiction line.
 
 ---
 
-## 📊 Export Options
+## 📊 Export Reference
 
-| Export | Format | Contents |
+| Option | Format | What's inside |
 |---|---|---|
-| Print Summary | Print dialog | Landscape A4 summary table |
-| Export as Summary | `.xlsx` | 3 sheets: Summary, Line Items, GST |
-| Export as Report | `.xlsx` | 1 sheet, all fields, one row per item |
-| Export as JSON | `.json` | Full backup, re-importable |
+| 🖨 Print Summary | Browser print | Landscape A4 invoice list |
+| 📊 Export as Summary | `.xlsx` | Summary + Line Items + GST sheets |
+| 📋 Export as Report | `.xlsx` | All fields, one row per item |
+| 📦 Export as JSON | `.json` | Full data backup, re-importable |
 
 ---
 
-## 💾 Backup Strategy
+## ⚙️ Customisation
 
-- Auto-backup JSON downloads on every **Save & Preview**
-- Manual backup via **⚙ Settings → Backup Now**
-- Import/merge from any previous backup via **⬇ Import**
-- Optionally link a local JSON file for persistent auto-save
-
----
-
-## ⚙ Customization
-
-Edit the `CO` constant near the top of the `<script>` block to set your company details:
+Edit the `CO` object near the top of the `<script>` block:
 
 ```js
 const CO = {
-  name: 'YOUR COMPANY NAME',
-  l1: 'Address Line 1',
-  l2: 'City, State, Country',
-  gstin: 'YOUR_GSTIN',
-  pan: 'YOUR_PAN',
-  bank: 'Bank Name',
-  acc: 'Account Number',
+  name:   'YOUR COMPANY NAME',
+  l1:     'Address Line 1',
+  l2:     'City, State, Country',
+  gstin:  'YOUR_GSTIN',
+  pan:    'YOUR_PAN',
+  bank:   'Bank Name',
+  acc:    'Account Number',
   branch: 'Branch Name',
-  ifsc: 'IFSC Code',
-  email: 'email@example.com',
-  ph: '+91 XXXXXXXXXX',
-  web: 'www.yoursite.com'
+  ifsc:   'IFSC Code',
+  email:  'email@example.com',
+  ph:     '+91 XXXXXXXXXX',
+  web:    'www.yoursite.com',
 };
 ```
 
-Or upload your logo via **⚙ Settings** — no code change needed.
+Or skip the code entirely — use **⚙ Settings → Upload Logo** and the company info fields inside the app.
 
 ---
 
-## 🔒 Privacy
+## 💾 Backup & Restore
 
-All data stays on your device. Nothing is sent to any server. Ever.
+| Action | How |
+|---|---|
+| Auto-backup | Downloads automatically on every **Save & Preview** |
+| Manual backup | **⚙ Settings → Backup Now** |
+| Restore | **⬇ Import** → pick any `Invoice_Backup_*.json` |
+| Excel restore | **⬇ Import** → pick a Full Export `.xlsx` |
+
+Backups **merge** — existing invoices are never overwritten. Duplicates are skipped automatically.
+
+> All data lives on your device. Nothing is ever sent to a server.
+
+---
+
+## 🔑 Invoice Number Format
+
+```
+NNN / MM / YY-YY
+ │     │    └── Fiscal year (e.g. 26-27)
+ │     └─────── Month (01–12)
+ └───────────── Serial number (resets each fiscal year)
+```
+
+Example: `003/04/26-27` = 3rd invoice, April 2026, FY 2026-27.  
+Fiscal year runs **April → March**.
+
+---
+
+## 🛡 Browser Support
+
+| Browser | Status |
+|---|---|
+| Chrome / Edge | ✅ Full support |
+| Firefox | ✅ Full support |
+| Safari | ✅ Works (Service Worker limited on iOS) |
+| IE / Old browsers | ❌ Not supported |
 
 ---
 
 ## 📄 License
 
-MIT — use freely, modify as needed.
+MIT — free to use, modify, and distribute.
 
 ---
 
-*Built for a client in the port & shipping services industry who needed a fast, reliable alternative to Excel-based invoicing without any heavy infrastructure.*
+*Built as a lightweight alternative to Excel-based invoicing for a port services client. No servers were harmed in the making of this app.*
