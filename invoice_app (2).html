@@ -1,0 +1,3070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Company Invoice — Invoice App</title>
+<!-- Multi-CDN fallbacks for offline resilience -->
+<script>
+// Register a simple Service Worker to cache scripts after first load
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('').catch(()=>{});
+  // Inline SW via blob for cache-on-load without external sw.js file
+  const swCode=`
+const CACHE='inv-v1';
+const URLS=[
+  'https://unpkg.com/react@18/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+  'https://unpkg.com/@babel/standalone/babel.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(URLS).catch(()=>{}))));
+self.addEventListener('fetch',e=>{
+  if(URLS.some(u=>e.request.url===u)){
+    e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{
+      caches.open(CACHE).then(c=>c.put(e.request,res.clone()));return res;
+    })));
+  }
+});`;
+  const swBlob=new Blob([swCode],{type:'application/javascript'});
+  const swURL=URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swURL,{scope:'./'}).catch(()=>{});
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+<script>if(!window.React){document.write('<scr'+'ipt src="https://unpkg.com/react@18/umd/react.production.min.js"><\/scr'+'ipt>');}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+<script>if(!window.ReactDOM){document.write('<scr'+'ipt src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/scr'+'ipt>');}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" crossorigin></script>
+<script>if(!window.Babel){document.write('<scr'+'ipt src="https://unpkg.com/@babel/standalone/babel.min.js"><\/scr'+'ipt>');}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// Show friendly offline message if scripts failed
+window.addEventListener('load',()=>{
+  if(!window.React||!window.ReactDOM||!window.Babel){
+    document.body.innerHTML='<div style="font-family:Arial,sans-serif;padding:40px;max-width:500px;margin:60px auto;text-align:center;border:1.5px solid #e00;border-radius:12px;background:#fff8f8"><div style="font-size:40px;margin-bottom:16px">📡</div><h2 style="color:#c00;margin-bottom:12px">Cannot Load App</h2><p style="color:#555;line-height:1.6;margin-bottom:20px">This app needs an internet connection the <b>first time</b> you open it. After that it works offline automatically.<br><br>Please connect to WiFi or mobile data and <b>reload the page</b>.</p><button onclick="location.reload()" style="background:#1a56db;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:16px;cursor:pointer;font-weight:600">🔄 Retry</button></div>';
+  }
+});
+</script>
+<style>
+/* ═══════════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════════ */
+:root{
+  --bg:#f0f2f5;--bg2:#fff;--bg3:#e8eaed;--bg4:#d1d5db;
+  --text:#111827;--text2:#374151;--text3:#6b7280;--text4:#9ca3af;
+  --border:#d1d5db;--border2:#9ca3af;
+  --card:#fff;--input:#fff;
+  --accent:#1a56db;--accent-h:#1240a8;--accent-lt:#dbeafe;--accent-txt:#1e3a8a;
+  --success:#166534;--success-bg:#dcfce7;
+  --danger:#991b1b;--danger-bg:#fee2e2;
+  --warn:#92400e;--warn-bg:#fef3c7;
+  --info:#1e40af;--info-bg:#dbeafe;
+  --shadow:0 1px 4px rgba(0,0,0,.13),0 1px 2px rgba(0,0,0,.07);
+  --shadow-lg:0 6px 22px rgba(0,0,0,.13);
+  --r:8px;--rl:12px;--rxl:16px;
+}
+.dark{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;
+  --text:#e6edf3;--text2:#c9d1d9;--text3:#8b949e;--text4:#6e7681;
+  --border:#30363d;--border2:#484f58;
+  --card:#161b22;--input:#21262d;
+  --accent:#58a6ff;--accent-h:#79b8ff;--accent-lt:#1c2d42;--accent-txt:#79b8ff;
+  --success:#3fb950;--success-bg:#0d2818;
+  --danger:#f85149;--danger-bg:#3d0c0c;
+  --warn:#d29922;--warn-bg:#2d1c00;
+  --info:#58a6ff;--info-bg:#1c2d42;
+  --shadow:0 1px 4px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.3);
+  --shadow-lg:0 6px 24px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{min-height:100vh}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;transition:background .22s,color .22s}
+input,select,textarea{font-family:inherit;font-size:13px;padding:8px 11px;border:1.5px solid var(--border2);border-radius:var(--r);width:100%;background:var(--input);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,86,219,.16)}
+input::placeholder,textarea::placeholder{color:var(--text4)}
+select{cursor:pointer}
+textarea{resize:vertical;min-height:50px}
+input[type=checkbox]{width:auto;cursor:pointer;accent-color:var(--accent)}
+input:disabled,select:disabled{opacity:.5;cursor:not-allowed;background:var(--bg3)}
+.btn{padding:7px 15px;border-radius:var(--r);font-size:13px;font-weight:600;border:none;cursor:pointer;transition:all .14s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-h)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-ghost{background:transparent;border:1.5px solid var(--border2);color:var(--text)}
+.btn-ghost:hover{background:var(--bg3)}
+.btn-ghost:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-danger{background:transparent;border:1.5px solid var(--danger);color:var(--danger)}
+.btn-danger:hover{background:var(--danger-bg)}
+.btn-success{background:var(--success);color:#fff}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 9px;font-size:11px;border-radius:6px}
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.sec-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:11px}
+.lbl{font-size:12px;color:var(--text2);margin-bottom:4px;display:block;font-weight:600}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:600px){
+  .g3{grid-template-columns:1fr 1fr}
+  .g4{grid-template-columns:1fr 1fr}
+  .sp2{grid-column:span 1}
+}
+.sp2{grid-column:span 2}
+.stat-card{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rl);padding:14px 18px}
+.dtbl{width:100%;border-collapse:collapse;font-size:13px}
+.dtbl th{padding:10px 13px;text-align:left;font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border);background:var(--bg3);white-space:nowrap}
+.dtbl td{padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:middle}
+.dtbl tbody tr{cursor:pointer;transition:background .1s}
+.dtbl tbody tr:hover td{background:var(--bg3)}
+.dtbl tbody tr:last-child td{border-bottom:none}
+.ac-wrap{position:relative}
+.ac-list{position:absolute;z-index:600;top:calc(100% + 3px);left:0;right:0;background:var(--card);border:1.5px solid var(--border2);border-radius:var(--rl);box-shadow:var(--shadow-lg);max-height:240px;overflow-y:auto}
+.ac-item{padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;font-size:13px}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.hi{background:var(--bg3)}
+.ac-name{font-weight:600;color:var(--text)}
+.ac-sub{font-size:11px;color:var(--text3);margin-top:1px}
+.alert{padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px;border-left:3px solid}
+.alert-warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.alert-info{background:var(--info-bg);color:var(--info);border-color:var(--info)}
+.toast-wrap{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:11px 18px;border-radius:var(--rl);font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);animation:tIn .25s ease;pointer-events:none;min-width:220px;max-width:340px}
+.toast-success{background:var(--success-bg);color:var(--success);border:1.5px solid var(--success)}
+.toast-error{background:var(--danger-bg);color:var(--danger);border:1.5px solid var(--danger)}
+.toast-info{background:var(--info-bg);color:var(--info);border:1.5px solid var(--info)}
+@keyframes tIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.modal{background:var(--card);border-radius:var(--rxl);padding:24px 28px;max-width:560px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);border:1.5px solid var(--border);animation:mIn .2s ease}
+@keyframes mIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@media print{
+  #preview-wrap{min-height:0!important;height:0!important;overflow:hidden!important;padding:0!important}
+  body>*:not(#print-area){display:none!important}
+  #print-area{
+    display:block!important;visibility:visible!important;
+    position:static!important;
+    width:100%!important;max-width:100%!important;
+    margin:0!important;padding:8mm!important;
+    background:#fff!important;color:#000!important;
+    box-shadow:none!important;overflow:visible!important;
+    box-sizing:border-box!important;
+  }
+  #print-area *{visibility:visible!important}
+  @page{margin:0;size:A4 portrait}
+  .invoice-container{
+    display:flex!important;flex-direction:column!important;
+    min-height:calc(297mm - 24mm)!important;
+    page-break-inside:avoid!important;
+    box-sizing:border-box!important;
+  }
+  .inv-page-break{
+    page-break-before:always!important;
+    display:block!important;
+    padding-top:8mm!important;
+  }
+  table,tr,td,th{page-break-inside:avoid}
+  .invoice-table{width:100%!important;table-layout:fixed!important;max-width:100%!important}
+  .invoice-table td,.invoice-table th{overflow-wrap:break-word!important;word-wrap:break-word!important;font-size:7.5pt!important}
+}
+/* Invoice header layout */
+.invoice-header{display:flex;align-items:flex-start;gap:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:8px}
+.logo-box{width:140px;min-width:80px;max-width:140px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-start}
+.logo-box img{max-width:100%;height:auto;max-height:80px;object-fit:contain;display:block}
+.invoice-header-details{flex:1;min-width:0}
+.invoice-header-right{text-align:right;flex-shrink:0;padding-left:12px;align-self:flex-start}
+/* Invoice table */
+.invoice-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.5pt;margin-bottom:6px;max-width:100%}
+.invoice-table th,.invoice-table td{overflow-wrap:break-word;word-wrap:break-word;padding:3px 4px;vertical-align:top}
+.col-sr{width:4%}
+.col-desc{width:30%}
+.col-hsn{width:9%}
+.col-qty{width:9%}
+.col-rate{width:10%}
+.col-per{width:5%}
+.col-amt{width:12%}
+.col-disc{width:9%}
+.col-taxable{width:12%}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useRef,useMemo,useCallback}=React;
+
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════ */
+const CO={name:'',l1:'',l2:'',
+  gstin:'',pan:'',bank:'',acc:'',
+  branch:'',ifsc:'',email:'',
+  ph:'',web:''};
+
+const STATES=[
+  {c:'01',n:'Jammu & Kashmir'},{c:'02',n:'Himachal Pradesh'},{c:'03',n:'Punjab'},
+  {c:'04',n:'Chandigarh'},{c:'05',n:'Uttarakhand'},{c:'06',n:'Haryana'},
+  {c:'07',n:'Delhi'},{c:'08',n:'Rajasthan'},{c:'09',n:'Uttar Pradesh'},
+  {c:'10',n:'Bihar'},{c:'11',n:'Sikkim'},{c:'12',n:'Arunachal Pradesh'},
+  {c:'13',n:'Nagaland'},{c:'14',n:'Manipur'},{c:'15',n:'Mizoram'},
+  {c:'16',n:'Tripura'},{c:'17',n:'Meghalaya'},{c:'18',n:'Assam'},
+  {c:'19',n:'West Bengal'},{c:'20',n:'Jharkhand'},{c:'21',n:'Odisha'},
+  {c:'22',n:'Chhattisgarh'},{c:'23',n:'Madhya Pradesh'},{c:'24',n:'Gujarat'},
+  {c:'26',n:'Dadra & NH / Daman & Diu'},{c:'27',n:'Maharashtra'},
+  {c:'29',n:'Karnataka'},{c:'30',n:'Goa'},{c:'31',n:'Lakshadweep'},
+  {c:'32',n:'Kerala'},{c:'33',n:'Tamil Nadu'},{c:'34',n:'Puducherry'},
+  {c:'35',n:'Andaman & Nicobar'},{c:'36',n:'Telangana'},
+  {c:'37',n:'Andhra Pradesh'},{c:'38',n:'Ladakh'},{c:'97',n:'Other Territory'},
+];
+const STATE_CODE=Object.fromEntries(STATES.map(s=>[s.n,s.c]));
+const CODE_STATE=Object.fromEntries(STATES.map(s=>[s.c,s.n]));
+const STATE_NAMES=STATES.map(s=>s.n);
+const STATE_CODES=STATES.map(s=>s.c);
+
+const PORTS=[
+  'KANDLA (Deendayal Port)','MUNDRA','PIPAVAV','HAZIRA','DAHEJ',
+  'OKHA','PORBANDAR','TUNA PORT','NAVLAKHI','ALANG','BEDI / ROZI',
+  'MUMBAI (MBPT)','JNPT / NHAVA SHEVA','MORMUGAO (GOA)','NEW MANGALORE',
+  'KOCHI','CHENNAI','ENNORE / KAMARAJAR','TUTICORIN (V.O.C.)',
+  'VISHAKHAPATNAM','PARADIP','HALDIA','KOLKATA',
+  'OUTER ANCHORAGE (OTB)','OUTER ANCHORAGE (OPL)','DPA KANDLA','DPT KANDLA',
+];
+const METHODS=['E-MAIL','LETTER','TELE','VERBAL','FAX','WHATSAPP'];
+const CURRENCIES=['INR','USD','EUR','GBP','JPY','AED','SGD','CHF'];
+const MONTHS=[{v:'',l:'All Months'},{v:'01',l:'January'},{v:'02',l:'February'},{v:'03',l:'March'},
+  {v:'04',l:'April'},{v:'05',l:'May'},{v:'06',l:'June'},{v:'07',l:'July'},
+  {v:'08',l:'August'},{v:'09',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}];
+
+/* ═══════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════ */
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const inr=n=>(parseFloat(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2,minimumFractionDigits:2});
+const inrI=n=>Math.round(parseFloat(n)||0).toLocaleString('en-IN');
+const today=()=>new Date().toISOString().slice(0,10);
+const clean=s=>String(s||'').trim().replace(/^(NaN|nan|null|undefined|0)$/,'');
+
+/* ── Sanitize dirty legacy values ────────────────────────────────────────── */
+function sanitizeInv(inv){
+  // Returns a cleaned copy — strips "0","0000", whitespace-only, invalid epoch dates
+  const cp=JSON.parse(JSON.stringify(inv));
+  const blankVal=v=>{const s=String(v||'').trim();return(!s||/^0+$/.test(s))?'':s;};
+  cp.veh=blankVal(cp.veh);
+  cp.ewNo=blankVal(cp.ewNo);
+  cp.poNo=blankVal(cp.poNo);
+  cp.rmk=blankVal(cp.rmk);
+  cp.rmkD=blankVal(cp.rmkD);
+  // Convert numeric rc/ins/fr strings to actual numbers
+  cp.rc=parseFloat(cp.rc)||0;
+  cp.ins=parseFloat(cp.ins)||0;
+  cp.fr=parseFloat(cp.fr)||0;
+  // Wipe invalid epoch / placeholder dates
+  if(cp.ewDt&&(cp.ewDt.startsWith('0001')||cp.ewDt.startsWith('0000')))cp.ewDt='';
+  if(cp.oDate&&cp.oDate.startsWith('0001'))cp.oDate=today();
+  // Ensure jobType/poType fallbacks
+  if(!cp.jobType)cp.jobType='Job';
+  if(!cp.poType)cp.poType='PO';
+  return cp;
+}
+
+function fmtDate(v){
+  if(!v)return'';
+  if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(0,10);
+  const s=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+  const dmy=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(dmy)return`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+  const d=new Date(s);
+  return isNaN(d)?'':d.toISOString().slice(0,10);
+}
+
+function toWords(num){
+  const n=Math.round(num);if(!n)return'Zero Rupees Only';
+  const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function w(x){if(!x)return'';if(x<20)return a[x]+' ';if(x<100)return b[Math.floor(x/10)]+(x%10?' '+a[x%10]:'')+' ';
+    if(x<1000)return a[Math.floor(x/100)]+' Hundred '+w(x%100);
+    if(x<100000)return w(Math.floor(x/1000))+'Thousand '+w(x%1000);
+    if(x<10000000)return w(Math.floor(x/100000))+'Lakh '+w(x%100000);
+    return w(Math.floor(x/10000000))+'Crore '+w(x%10000000);}
+  return'Indian Rupees '+w(n).trim().replace(/\s+/g,' ')+' Only';
+}
+
+function calcInv(inv){
+  const tv=(inv.items||[]).reduce((s,it)=>s+(parseFloat(it.taxable)||0),0);
+  const rc=parseFloat(inv.rc)||0,ins=parseFloat(inv.ins)||0,fr=parseFloat(inv.fr)||0;
+  const gt=tv+rc+ins+fr;
+  let sg=0,cg=0,ig=0;
+  if(inv.gst==='SC'){sg=cg=gt*0.09;}else if(inv.gst==='IG'){ig=gt*0.18;}
+  const tot=gt+sg+cg+ig,fin=Math.round(tot),ro=parseFloat((fin-tot).toFixed(2));
+  return{tv,gt,sg,cg,ig,tot,ro,fin};
+}
+
+/* ═══════════════════════════════════════════════
+   STORAGE
+═══════════════════════════════════════════════ */
+const K={INVS:'inv_invs_v5',PARTIES:'inv_parties_v4',THEME:'inv_theme',SHIPS:'inv_ships_v2',
+  DESCS:'inv_descs_v2',LOGO:'inv_logo_v1',FSFILE:'inv_fsfile',SHOW_FTOTAL:'inv_show_ftotal',
+  SHOW_EMPTY_FIELDS:'inv_show_empty_fields',FULL_EXCEL:'inv_full_excel',DATE_FMT:'inv_date_fmt'};
+
+// ── Date display helper ──────────────────────────────────────────────────────
+let _dateFmt='DMY';
+function setDateFmt(f){_dateFmt=f;ls.set(K.DATE_FMT,f);}
+function fmtD(isoStr){
+  if(!isoStr)return'';
+  const s=String(isoStr).slice(0,10);
+  if(_dateFmt==='YMD')return s;
+  const[y,m,d]=s.split('-');
+  return`${d||'??'}/${m||'??'}/${y||'????'}`;
+}
+
+/* ═══════════════════════════════════════════════
+   STORAGE  — IndexedDB primary, localStorage fallback
+   Same API as before: ls.get / ls.set / ls.ok
+   IndexedDB survives Chrome's storage pressure clearing;
+   localStorage can be wiped by the browser silently.
+═══════════════════════════════════════════════ */
+const ls={
+  get:(k,fb=null)=>{try{const v=localStorage.getItem(k);return v!=null?JSON.parse(v):fb;}catch{return fb;}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}},
+  ok:()=>{try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return true;}catch{return false;}}
+};
+
+// ── IndexedDB layer ───────────────────────────────────────────────────────────
+// Wraps IDB with a simple promise API. Falls back silently to ls if IDB unavailable.
+const idb=(()=>{
+  const DB='inv_db',STORE='kv',VER=1;
+  let _db=null;
+  function open(){
+    return new Promise((res,rej)=>{
+      if(_db)return res(_db);
+      const req=indexedDB.open(DB,VER);
+      req.onupgradeneeded=e=>e.target.result.createObjectStore(STORE);
+      req.onsuccess=e=>{_db=e.target.result;res(_db);};
+      req.onerror=()=>rej(req.error);
+    });
+  }
+  async function get(k,fb=null){
+    try{
+      const db=await open();
+      return await new Promise((res,rej)=>{
+        const tx=db.transaction(STORE,'readonly');
+        const req=tx.objectStore(STORE).get(k);
+        req.onsuccess=()=>res(req.result!==undefined?req.result:fb);
+        req.onerror=()=>rej(req.error);
+      });
+    }catch{return ls.get(k,fb);}
+  }
+  async function set(k,v){
+    try{
+      const db=await open();
+      await new Promise((res,rej)=>{
+        const tx=db.transaction(STORE,'readwrite');
+        const req=tx.objectStore(STORE).put(v,k);
+        req.onsuccess=()=>res();
+        req.onerror=()=>rej(req.error);
+      });
+      ls.set(k,v);// mirror to ls as double-backup
+      return true;
+    }catch{return ls.set(k,v);}
+  }
+  // Migrate existing localStorage data into IDB on first run
+  async function migrate(){
+    try{
+      const keys=Object.values(K);
+      for(const k of keys){
+        const lsVal=ls.get(k,null);
+        if(lsVal!==null){
+          const idbVal=await get(k,null);
+          if(idbVal===null)await set(k,lsVal);
+        }
+      }
+    }catch{}
+  }
+  return{get,set,migrate};
+})();
+
+// ── Async storage init — runs once on load ─────────────────────────────────
+// We keep the synchronous ls API for settings/theme (fast, non-critical).
+// For invoices (the important data) we use idb.
+let _idbReady=false;
+let _idbInvs=null;// will be loaded async, then React state takes over
+(async()=>{
+  try{await idb.migrate();_idbReady=true;}catch{}
+})();
+
+// ── Backup download helper ─────────────────────────────────────────────────
+function dlBackup(invList){
+  const date=new Date().toISOString().slice(0,10);
+  const data={version:5,exported:new Date().toISOString(),invoices:invList};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`Invoice_Backup_${date}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+const DEFAULT_DESCS=[
+  // Category 1 — Main Services
+  'CHARGES FOR REMOVAL OF NON HAZARDOUS GARBAGE FROM THE SHIP',
+  'CHARGES FOR COLLECTION AND DISPOSAL OF SHIP GENERATED GARBAGE',
+  'CHARGES FOR COLLECTION AND DISPOSAL OF SOLID WASTE FROM THE SHIP',
+  'CHARGES FOR HANDLING AND DISPOSAL OF NON-HAZARDOUS SOLID WASTE',
+  'CHARGES FOR COLLECTION AND DISPOSAL OF BILGE WATER FROM THE SHIP',
+  'CHARGES FOR REMOVAL AND DISPOSAL OF SLUDGE FROM THE SHIP',
+  'CHARGES FOR DISPOSAL OF OILY WASTE FROM THE SHIP',
+  'CHARGES FOR COLLECTION AND DISPOSAL OF LIQUID WASTE FROM THE SHIP',
+  'CHARGES FOR COLLECTION OF DRY WASTE FROM THE SHIP',
+  'CHARGES FOR COLLECTION OF WET WASTE FROM THE SHIP',
+  'CHARGES FOR SEGREGATION AND HANDLING OF SHIP GENERATED WASTE',
+  'CHARGES FOR WASTE HANDLING SERVICES PROVIDED TO THE VESSEL',
+  'CHARGES FOR GARBAGE COLLECTION SERVICES AT PORT',
+  'CHARGES FOR WASTE MANAGEMENT SERVICES FOR THE VESSEL',
+  // Category 2 — Additional Charges
+  'ADDITIONAL CHARGES FOR EXCESS QUANTITY',
+  'CHARGES FOR ADDITIONAL TRIP / SERVICE',
+  'CHARGES FOR SHORE PUMPING / SPECIAL EQUIPMENT',
+  'WAITING / OVERTIME SERVICE CHARGES',
+  'ADDITIONAL TRANSPORTATION CHARGES',
+];
+
+/* ═══════════════════════════════════════════════
+   DEFAULT DESCRIPTION SUGGESTIONS (clean predefined)
+═══════════════════════════════════════════════ */
+let _fsH=null;
+const fsSave=async d=>{if(!_fsH)return false;try{const w=await _fsH.createWritable();await w.write(JSON.stringify(d,null,2));await w.close();return true;}catch{return false;}};
+const fsPick=async d=>{if(!window.showSaveFilePicker)return false;try{_fsH=await window.showSaveFilePicker({suggestedName:'invoices.json',types:[{description:'JSON',accept:{'application/json':['.json']}}]});ls.set(K.FSFILE,_fsH.name);return await fsSave(d);}catch{return false;}};
+
+function dlJSON(data,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download=name;a.click();URL.revokeObjectURL(a.href);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PURE-JS XLSX WRITER  — generates real styled .xlsx files with zero deps
+//  XLSX = ZIP of XML files. We build each XML part then ZIP them in-browser.
+//  SheetJS is kept ONLY for reading (import). All writing goes through here.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Tiny CRC32 + ZIP builder (no external lib needed) ────────────────────────
+const _crc32tbl=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?(0xEDB88320^(c>>>1)):c>>>1;t[i]=c;}return t;})();
+function _crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=_crc32tbl[(c^buf[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
+function _u32(n){return[n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF];}
+function _u16(n){return[n&0xFF,(n>>8)&0xFF];}
+function _str(s){const e=new TextEncoder();return e.encode(s);}
+
+function _zipFile(name,data){
+  // data: Uint8Array, name: string  → local file header + data bytes
+  const nb=_str(name),dl=data.length,crc=_crc32(data);
+  const lh=[0x50,0x4B,0x03,0x04,20,0,0,0,0,0,0,0,0,0,..._u32(crc),..._u32(dl),..._u32(dl),..._u16(nb.length),0,0];
+  return{name,nb,data,crc,lh,offset:0};
+}
+
+function _buildZip(entries){
+  // entries: array of {name,data(Uint8Array)}
+  const files=entries.map(e=>_zipFile(e.name,typeof e.data==='string'?_str(e.data):e.data));
+  // calculate offsets
+  let off=0;
+  files.forEach(f=>{f.offset=off;off+=f.lh.length+f.nb.length+f.data.length;});
+  const cdOff=off;
+  // central directory
+  const cds=files.map(f=>{
+    const cd=[0x50,0x4B,0x01,0x02,20,0,20,0,0,0,0,0,0,0,0,0,..._u32(f.crc),..._u32(f.data.length),..._u32(f.data.length),..._u16(f.nb.length),0,0,0,0,0,0,0,0,0,0,0,0,..._u32(f.offset)];
+    return new Uint8Array([...cd,...f.nb]);
+  });
+  const cdLen=cds.reduce((s,c)=>s+c.length,0);
+  const eocd=[0x50,0x4B,0x05,0x06,0,0,0,0,..._u16(files.length),..._u16(files.length),..._u32(cdLen),..._u32(cdOff),0,0];
+  // assemble
+  const total=off+cdLen+eocd.length;
+  const out=new Uint8Array(total);let p=0;
+  files.forEach(f=>{out.set(new Uint8Array(f.lh),p);p+=f.lh.length;out.set(f.nb,p);p+=f.nb.length;out.set(f.data,p);p+=f.data.length;});
+  cds.forEach(c=>{out.set(c,p);p+=c.length;});
+  out.set(new Uint8Array(eocd),p);
+  return out;
+}
+
+function _dlBlob(data,filename){
+  const blob=new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+// ── Style catalogue — ALL styles defined here, cells just reference index ────
+//  Idx  Description
+//   0   default (no style)
+//   1   hdr-company-name  : bg=E8F0FB, font=18pt bold navy, center
+//   2   hdr-address       : bg=E8F0FB, font=8pt italic grey, center
+//   3   hdr-fill-only     : bg=E8F0FB (for merged empty cells in header row)
+//   4   hdr-title-banner  : bg=0F2D6E, font=13pt bold white, center
+//   5   hdr-title-fill    : bg=0F2D6E fill only
+//   6   hdr-info-strip    : bg=D0DFF5, font=9pt italic navy, center
+//   7   hdr-info-fill     : bg=D0DFF5 fill only
+//   8   spacer            : bg=F2F6FC fill only
+//   9   grp-A-hdr         : bg=1A3560 bold italic 8pt white center
+//  10   grp-B-hdr         : bg=145C35 bold italic 8pt white center
+//  11   grp-C-hdr         : bg=1A4F4F bold italic 8pt white center
+//  12   grp-D-hdr         : bg=5C3A10 bold italic 8pt white center
+//  13   grp-E-hdr         : bg=3A1560 bold italic 8pt white center
+//  14   grp-F-hdr         : bg=404040 bold italic 8pt white center
+//  15   col-hdr-A         : bg=1A3560 bold 9pt white center medium-border
+//  16   col-hdr-B         : bg=145C35 bold 9pt white center medium-border
+//  17   col-hdr-C         : bg=1A4F4F bold 9pt white center medium-border
+//  18   col-hdr-D         : bg=5C3A10 bold 9pt white center medium-border
+//  19   col-hdr-E         : bg=3A1560 bold 9pt white center medium-border
+//  20   col-hdr-F         : bg=404040 bold 9pt white center medium-border
+//  21   data-A-even-text  : bg=DCE8F7 9pt thin-border
+//  22   data-A-odd-text   : bg=C5D8F0 9pt thin-border
+//  23   data-B-even-text  : bg=D5EFE2 9pt thin-border
+//  24   data-B-odd-text   : bg=BDDEC9 9pt thin-border
+//  25   data-C-even-text  : bg=D5EDED 9pt thin-border
+//  26   data-C-odd-text   : bg=BDDADA 9pt thin-border
+//  27   data-D-even-text  : bg=F5E8D5 9pt thin-border
+//  28   data-D-odd-text   : bg=EDD5BB 9pt thin-border
+//  29   data-E-even-text  : bg=EAD5F5 9pt thin-border
+//  30   data-E-odd-text   : bg=D5BBED 9pt thin-border
+//  31   data-F-even-text  : bg=EBEBEB 9pt thin-border
+//  32   data-F-odd-text   : bg=D8D8D8 9pt thin-border
+//  33   data-A-even-num   : same as 21 + right-align + number fmt
+//  34   data-A-odd-num    : same as 22 + right-align + number fmt
+//  35-44: num versions of B..F even/odd
+//  45   inv-no-even       : data-A-even + bold navy text
+//  46   inv-no-odd        : data-A-odd + bold navy text
+//  47   grand-total-num   : bg=0F2D6E bold gold 11pt number right medium-border
+//  48   grand-total-text  : bg=0F2D6E bold white 10pt center medium-border
+//  49   sum-hdr-text      : bg=1E3A5F bold white 9pt center medium-border (for summary sheets)
+//  50   sum-even-text     : bg=FFFFFF 9pt thin-border
+//  51   sum-odd-text      : bg=EBF3FF 9pt thin-border
+//  52   sum-even-num      : FFFFFF + right + numfmt
+//  53   sum-odd-num       : EBF3FF + right + numfmt
+//  54   sum-inv-even      : FFFFFF bold navy
+//  55   sum-inv-odd       : EBF3FF bold navy
+//  56   sum-fin-even      : D0DFF5 bold navy right numfmt
+//  57   sum-fin-odd       : C2D4F0 bold navy right numfmt
+//  58   sum-date-even     : FFFFFF 9pt center thin-border
+//  59   sum-date-odd      : EBF3FF 9pt center thin-border
+//  60   sum-wrap-even     : FFFFFF 9pt wrap thin-border
+//  61   sum-wrap-odd      : EBF3FF 9pt wrap thin-border
+
+const _STYLES_XML=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00"/></numFmts>
+<fonts count="12">
+<font><name val="Calibri"/><sz val="10"/><color theme="1"/></font>
+<font><b/><name val="Calibri"/><sz val="18"/><color rgb="FF0F2D6E"/></font>
+<font><i/><name val="Calibri"/><sz val="8"/><color rgb="FF374151"/></font>
+<font><b/><name val="Calibri"/><sz val="13"/><color rgb="FFFFFFFF"/></font>
+<font><i/><name val="Calibri"/><sz val="9"/><color rgb="FF0F2D6E"/></font>
+<font><b/><i/><name val="Calibri"/><sz val="8"/><color rgb="FFFFFFFF"/></font>
+<font><b/><name val="Calibri"/><sz val="9"/><color rgb="FFFFFFFF"/></font>
+<font><name val="Calibri"/><sz val="9"/></font>
+<font><b/><name val="Calibri"/><sz val="9"/><color rgb="FF0F2D6E"/></font>
+<font><b/><name val="Calibri"/><sz val="11"/><color rgb="FFFFD700"/></font>
+<font><b/><name val="Calibri"/><sz val="10"/><color rgb="FFFFFFFF"/></font>
+<font><name val="Calibri"/><sz val="9"/><color rgb="FF0F2D6E"/></font>
+</fonts>
+<fills count="40">
+<fill><patternFill/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFE8F0FB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF0F2D6E"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD0DFF5"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF2F6FC"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF1A3560"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF145C35"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF1A4F4F"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF5C3A10"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF3A1560"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF404040"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFDCE8F7"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFC5D8F0"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD5EFE2"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFBDDEC9"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD5EDED"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFBDDADA"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF5E8D5"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEAD5F5"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD5BBED"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEBEBEB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD8D8D8"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF1E3A5F"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEBF3FF"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD0DFF5"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFC2D4F0"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEBF1FB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEAF3FF"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDD5BB"/></patternFill></fill>
+</fills>
+<borders count="3">
+<border><left/><right/><top/><bottom/><diagonal/></border>
+<border>
+  <left style="thin"><color rgb="FFC8D0DC"/></left>
+  <right style="thin"><color rgb="FFC8D0DC"/></right>
+  <top style="thin"><color rgb="FFC8D0DC"/></top>
+  <bottom style="thin"><color rgb="FFC8D0DC"/></bottom>
+  <diagonal/>
+</border>
+<border>
+  <left style="medium"><color rgb="FF1A3A6B"/></left>
+  <right style="medium"><color rgb="FF1A3A6B"/></right>
+  <top style="medium"><color rgb="FF1A3A6B"/></top>
+  <bottom style="medium"><color rgb="FF1A3A6B"/></bottom>
+  <diagonal/>
+</border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="62">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/>
+<xf numFmtId="0" fontId="3" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>
+<xf numFmtId="0" fontId="4" fillId="4" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/>
+<xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/>
+<xf numFmtId="0" fontId="5" fillId="6" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="7" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="8" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="9" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="10" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="11" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="6" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="6" fillId="7" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="6" fillId="8" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="6" fillId="9" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="6" fillId="10" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="6" fillId="11" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="7" fillId="12" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="13" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="14" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="15" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="16" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="17" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="18" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="19" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="20" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="21" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="22" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="23" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="12" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="13" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="14" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="15" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="16" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="17" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="18" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="19" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="20" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="21" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="22" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="23" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="8" fillId="12" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="8" fillId="13" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="9" fillId="3" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="10" fillId="3" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="24" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="7" fillId="25" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="26" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="25" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="7" fillId="26" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="8" fillId="25" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="8" fillId="26" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="11" fillId="27" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="11" fillId="28" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="25" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="26" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="25" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="7" fillId="26" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+// Style index shortcuts
+const S={
+  // Header rows
+  CO_NAME:1, ADDR:2, HDR_FILL:3, TITLE:4, TITLE_FILL:5,
+  INFO:6, INFO_FILL:7, SPACER:8,
+  // Group label headers (6 groups)
+  GRP:[9,10,11,12,13,14],
+  // Column headers per group
+  COL_HDR:[15,16,17,18,19,20],
+  // Data text styles [even,odd] per group (6 groups × 2)
+  DT:[[21,22],[23,24],[25,26],[27,28],[29,30],[31,32]],
+  // Data number styles [even,odd] per group
+  DN:[[33,34],[35,36],[37,38],[39,40],[41,42],[43,44]],
+  // Invoice No styles [even,odd]
+  INO:[45,46],
+  // Grand total
+  GT_NUM:47, GT_TXT:48,
+  // Summary sheet header
+  SUM_HDR:49,
+  // Summary data
+  SE_TXT:50, SO_TXT:51, SE_NUM:52, SO_NUM:53,
+  SE_INO:54, SO_INO:55,
+  SE_FIN:56, SO_FIN:57,
+  SE_CTR:58, SO_CTR:59,
+  SE_WRAP:60, SO_WRAP:61,
+};
+
+// XML escaping
+function xe(v){
+  if(v===null||v===undefined)return'';
+  return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Sheet builder ─────────────────────────────────────────────────────────────
+class XSheet{
+  constructor(){
+    this.rows=[];   // array of arrays of cell objects
+    this.merges=[];
+    this.colWidths=[];
+    this.rowHeights=[];
+    this.freeze=null;
+    this._ss=new Map(); // shared strings
+    this._si=0;
+  }
+  _ss_idx(s){
+    const k=String(s);
+    if(!this._ss.has(k)){this._ss.set(k,this._si++);}
+    return this._ss.get(k);
+  }
+  // Add a row of cells. Each cell: {v, s, t} where t='s'|'n', s=style index
+  addRow(cells,hpx=16){
+    this.rows.push(cells);
+    this.rowHeights.push(hpx);
+  }
+  addMerge(r1,c1,r2,c2){this.merges.push({r1,c1,r2,c2});}
+  setColWidths(ws){this.colWidths=ws;}
+  setFreeze(row){this.freeze=row;}
+
+  setLogo(dataUrl){
+    if(!dataUrl)return;
+    const m=dataUrl.match(/^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,(.+)$/i);
+    if(!m)return;
+    const ext=m[1].toLowerCase().replace('jpeg','jpg').replace('svg+xml','svg');
+    const bin=atob(m[2]);
+    const buf=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+    this._logoData=buf;
+    this._logoExt=ext;
+    // ── Detect natural pixel dimensions ─────────────────────────────────
+    let pw=100,ph=100; // fallback px
+    if(ext==='png'&&buf.length>24){
+      // PNG: IHDR at offset 8, width at 16, height at 20 (big-endian uint32)
+      pw=(buf[16]<<24|buf[17]<<16|buf[18]<<8|buf[19])>>>0;
+      ph=(buf[20]<<24|buf[21]<<16|buf[22]<<8|buf[23])>>>0;
+    } else if((ext==='jpg'||ext==='jpeg')&&buf.length>4){
+      // JPEG: scan for SOF0/SOF2 marker (0xFF 0xC0 or 0xFF 0xC2)
+      for(let i=0;i<buf.length-8;i++){
+        if(buf[i]===0xFF&&(buf[i+1]===0xC0||buf[i+1]===0xC2)){
+          ph=(buf[i+5]<<8)|buf[i+6];
+          pw=(buf[i+7]<<8)|buf[i+8];
+          break;
+        }
+      }
+    }
+    // Scale to max 100px on longest side, preserving ratio → EMU (1px = 9525 EMU)
+    if(pw>0&&ph>0){
+      const maxPx=100;
+      const scale=Math.min(1,maxPx/Math.max(pw,ph));
+      this._logoW=Math.round(pw*scale*9525);
+      this._logoH=Math.round(ph*scale*9525);
+    } else {
+      this._logoW=952500; // 100px
+      this._logoH=952500; // 100px square fallback
+    }
+  }
+
+  // ── Generate worksheet XML ──
+  toXML(ssMap){
+    // ssMap: Map<string,index> built across all sheets
+    const colXML=this.colWidths.length?`<cols>${this.colWidths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`:'';
+    const mergeXML=this.merges.length?`<mergeCells count="${this.merges.length}">${this.merges.map(m=>`<mergeCell ref="${_colName(m.c1)}${m.r1+1}:${_colName(m.c2)}${m.r2+1}"/>`).join('')}</mergeCells>`:'';
+    const fpXML=this.freeze?`<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="${this.freeze}" topLeftCell="A${this.freeze+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`:'<sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>';
+
+    const rowsXML=this.rows.map((row,ri)=>{
+      const ht=this.rowHeights[ri]||16;
+      const cellsXML=row.map((cell,ci)=>{
+        if(!cell)return'';
+        const addr=`${_colName(ci)}${ri+1}`;
+        const s=cell.s||0;
+        if(cell.t==='n'){
+          const v=cell.v===null||cell.v===undefined||cell.v===''?'':cell.v;
+          if(v==='')return`<c r="${addr}" s="${s}"/>`;
+          return`<c r="${addr}" s="${s}" t="n"><v>${xe(v)}</v></c>`;
+        }else{
+          const str=String(cell.v===null||cell.v===undefined?'':cell.v);
+          if(str==='')return`<c r="${addr}" s="${s}"/>`;
+          const si=ssMap.get(str)??0;
+          return`<c r="${addr}" s="${s}" t="s"><v>${si}</v></c>`;
+        }
+      }).join('');
+      return`<row r="${ri+1}" ht="${ht}" customHeight="1">${cellsXML}</row>`;
+    }).join('');
+
+    return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+${fpXML}${colXML}<sheetData>${rowsXML}</sheetData>${mergeXML}${this._logoData?'<drawing r:id="rId1"/>'  :''}
+</worksheet>`;
+  }
+}
+
+function _colName(c){
+  let n='';while(c>=0){n=String.fromCharCode(65+(c%26))+n;c=Math.floor(c/26)-1;}return n;
+}
+
+// ── Build shared strings XML from all sheets ──────────────────────────────────
+function _buildSSXML(ssMap){
+  const strs=Array.from(ssMap.entries()).sort((a,b)=>a[1]-b[1]).map(([s])=>s);
+  const items=strs.map(s=>`<si><t xml:space="preserve">${xe(s)}</t></si>`).join('');
+  return`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strs.length}" uniqueCount="${strs.length}">${items}</sst>`;
+}
+
+// ── Assemble workbook with N sheets ──────────────────────────────────────────
+function _buildWorkbook(sheets){
+  // sheets: [{name,sheet:XSheet}]
+  // 1. Build unified shared strings map
+  const ssMap=new Map();let si=0;
+  sheets.forEach(({sheet})=>{
+    sheet.rows.forEach(row=>row.forEach(cell=>{
+      if(cell&&cell.t!=='n'){
+        const s=String(cell.v===null||cell.v===undefined?'':cell.v);
+        if(s&&!ssMap.has(s))ssMap.set(s,si++);
+      }
+    }));
+  });
+
+  // 2. Detect which sheets have a logo
+  const logoSheets=sheets.map(({sheet},i)=>sheet._logoData?{i,sheet}:null).filter(Boolean);
+  const hasLogos=logoSheets.length>0;
+
+  // 3. Content Types
+  const imgTypes=new Set(logoSheets.map(({sheet})=>sheet._logoExt||'png'));
+  const mimeOf={png:'image/png',jpg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml'};
+  const imgTypeXml=hasLogos?[...imgTypes].map(ext=>`<Default Extension="${ext}" ContentType="${mimeOf[ext]||'image/png'}"/>`).join(''):'';
+  const drawTypeXml=hasLogos?`<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`:'';
+
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+${imgTypeXml}
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+${drawTypeXml}
+</Types>`;
+
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}
+<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rId${sheets.length+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>`;
+
+  const wb=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${sheets.map(({name},i)=>`<sheet name="${xe(name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets>
+</workbook>`;
+
+  const entries=[
+    {name:'[Content_Types].xml',data:ct},
+    {name:'_rels/.rels',data:rels},
+    {name:'xl/workbook.xml',data:wb},
+    {name:'xl/_rels/workbook.xml.rels',data:wbRels},
+    {name:'xl/styles.xml',data:_STYLES_XML},
+    {name:'xl/sharedStrings.xml',data:_buildSSXML(ssMap)},
+    ...sheets.map(({sheet},i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:sheet.toXML(ssMap)})),
+  ];
+
+  // 4. For each sheet that has a logo, add media + drawing + rels
+  // We use one shared drawing/media (logo is the same for all sheets)
+  if(hasLogos){
+    const logoSheet=logoSheets[0].sheet;
+    const ext=logoSheet._logoExt||'png';
+    const logoBytes=logoSheet._logoData;
+    const cxEMU=logoSheet._logoW||952500;
+    const cyEMU=logoSheet._logoH||952500;
+
+    entries.push({name:`xl/media/image1.${ext}`,data:logoBytes});
+
+    const drawXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <xdr:oneCellAnchor>
+    <xdr:from><xdr:col>0</xdr:col><xdr:colOff>57150</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>57150</xdr:rowOff></xdr:from>
+    <xdr:ext cx="${cxEMU}" cy="${cyEMU}"/>
+    <xdr:pic>
+      <xdr:nvPicPr>
+        <xdr:cNvPr id="2" name="Logo"/>
+        <xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr>
+      </xdr:nvPicPr>
+      <xdr:blipFill>
+        <a:blip r:embed="rId1"/>
+        <a:stretch><a:fillRect/></a:stretch>
+      </xdr:blipFill>
+      <xdr:spPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="${cxEMU}" cy="${cyEMU}"/></a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      </xdr:spPr>
+    </xdr:pic>
+    <xdr:clientData/>
+  </xdr:oneCellAnchor>
+</xdr:wsDr>`;
+    entries.push({name:'xl/drawings/drawing1.xml',data:drawXml});
+
+    // Drawing rels — links drawing → media image
+    const drawRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.${ext}"/>
+</Relationships>`;
+    entries.push({name:'xl/drawings/_rels/drawing1.xml.rels',data:drawRels});
+
+    // Sheet rels — each logo sheet links to the drawing via rId1
+    logoSheets.forEach(({i})=>{
+      const sheetRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+</Relationships>`;
+      entries.push({name:`xl/worksheets/_rels/sheet${i+1}.xml.rels`,data:sheetRels});
+    });
+  }
+
+  return _buildZip(entries);
+}
+
+// ── Convenience cell constructors ─────────────────────────────────────────────
+const C_S=(v,s)=>({v:v===null||v===undefined?'':v, t:'s', s}); // string cell
+const C_N=(v,s)=>({v:parseFloat(v)||0, t:'n', s});               // number cell
+const C_E=(s)=>({v:'', t:'s', s});                                // empty with style
+
+// ── Branded header — 5 rows, returns row index 5 ─────────────────────────────
+function buildHeader(sheet,NC,reportTitle,invCount,genDate){
+  // Load logo and attach to sheet (will be embedded as image in the xlsx)
+  const logoData=ls.get(K.LOGO,'');
+  if(logoData)sheet.setLogo(logoData);
+
+  // Row 0: company name across all columns (logo floats over A1 via drawing)
+  const nameCell=C_S(CO.name,S.CO_NAME);
+  sheet.addRow([nameCell,...Array(NC-1).fill(C_E(S.HDR_FILL))],40);
+  sheet.addMerge(0,0,0,NC-1);
+
+  // Row 1: address
+  const addrTxt=`${CO.l1}, ${CO.l2}   ·   GSTIN: ${CO.gstin}   ·   PAN: ${CO.pan}   ·   Ph: ${CO.ph}   ·   ${CO.email}`;
+  sheet.addRow([C_S(addrTxt,S.ADDR),...Array(NC-1).fill(C_E(S.HDR_FILL))],14);
+  sheet.addMerge(1,0,1,NC-1);
+
+  // Row 2: title banner
+  sheet.addRow([C_S(reportTitle,S.TITLE),...Array(NC-1).fill(C_E(S.TITLE_FILL))],24);
+  sheet.addMerge(2,0,2,NC-1);
+
+  // Row 3: info
+  const infoTxt=`Generated: ${genDate}     ·     Total Invoices: ${invCount}`;
+  sheet.addRow([C_S(infoTxt,S.INFO),...Array(NC-1).fill(C_E(S.INFO_FILL))],14);
+  sheet.addMerge(3,0,3,NC-1);
+
+  // Row 4: spacer
+  sheet.addRow(Array(NC).fill(C_E(S.SPACER)),6);
+
+  return 5;
+}
+
+// Group → style helpers
+function grp(c){return c<=12?0:c<=20?1:c<=28?2:c<=37?3:c<=47?4:5;}
+function grpH(c){return c<=13?0:c<=21?1:c<=29?2:c<=38?3:c<=48?4:5;}
+function dt(c,even){const g=grp(c);return S.DT[g][even?0:1];}
+function dn(c,even){const g=grp(c);return S.DN[g][even?0:1];}
+
+// ── FULL EXPORT ───────────────────────────────────────────────────────────────
+function exportFullExcel(invListRaw,mFilt,yFilt){
+  const invList=invListRaw.filter(inv=>(inv.no||'').trim()&&(inv.billing?.name||'').trim());
+  if(!invList.length){toast('No completed invoices to export.','info');return;}
+
+  let filename='Invoice_All_Report.xlsx',reportTitle='Full Invoice Report';
+  if(mFilt&&yFilt){const mn=MONTHS.find(m=>m.v===mFilt)?.l||mFilt;filename=`Invoice_${mn}-${yFilt}_Report.xlsx`;reportTitle=`Full Invoice Report — ${mn} ${yFilt}`;}
+  else if(yFilt){filename=`Invoice_${yFilt}_Report.xlsx`;reportTitle=`Full Invoice Report — ${yFilt}`;}
+  else if(mFilt){const mn=MONTHS.find(m=>m.v===mFilt)?.l||mFilt;filename=`Invoice_${mn}_Report.xlsx`;reportTitle=`Full Invoice Report — ${mn}`;}
+  const genDate=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  const HDR=['Sr No','Invoice No','Invoice Date','Order Ref / Method','Order Date',
+    'Job Type','Job No / Appt No','PO Type','PO No',
+    'Vessel Name','Port of Service','Vehicle No','E-Way Bill No','E-Way Bill Date','Billing Name','Billing Addr 1','Billing Addr 2','Billing Addr 3','Billing City','Billing State','Billing Code','Billing GSTIN','Consignee Name','Cons Addr 1','Cons Addr 2','Cons Addr 3','Cons City','Cons State','Cons Code','Cons GSTIN','Sr','Description','HSN/SAC','Qty','Rate','Per','Amount (₹)','Discount (₹)','Taxable Value (₹)','Rev Charges (₹)','Insurance (₹)','Freight (₹)','Total Taxable (₹)','SGST 9% (₹)','CGST 9% (₹)','IGST 18% (₹)','Invoice Total (₹)','Rounding Off','Final Amount (₹)','GST Type','Currency','Exchange Rate','Remarks Heading','Remarks Details'];
+  const NC=HDR.length;
+  const GRP_LABELS=['A — Invoice Info','B — Billing Party','C — Consignee','D — Item Details','E — Financials','F — Extra Fields'];
+  const GRP_RANGES=[[0,13],[14,21],[22,29],[30,38],[39,48],[49,53]];
+  const COLS=[5,18,12,14,12,22,16,18,16,28,26,14,16,12,30,22,22,22,14,14,8,22,30,22,22,22,14,14,8,22,5,54,10,8,12,6,14,12,16,16,14,14,16,12,12,12,14,10,16,12,10,14,22,24];
+
+  const ws=new XSheet();
+  ws.setColWidths(COLS);
+  let r=buildHeader(ws,NC,reportTitle,invList.length,genDate);
+
+  // Group label row
+  const grpRow=GRP_RANGES.map(([s,e],gi)=>{
+    const cells=Array(e-s+1).fill(null).map((_,i)=>i===0?C_S(GRP_LABELS[gi],S.GRP[gi]):C_E(S.GRP[gi]));
+    return cells;
+  }).flat();
+  ws.addRow(grpRow,15);
+  GRP_RANGES.forEach(([s,e],gi)=>{if(e>s)ws.addMerge(r,s,r,e);});
+  r++;
+
+  // Column header row
+  ws.addRow(HDR.map((h,c)=>C_S(h,S.COL_HDR[grpH(c)])),18);
+  ws.setFreeze(r+1);
+  r++;
+
+  // Data rows
+  let _fullRow=0;
+  invList.forEach((inv,invIdx)=>{
+    const C=calcInv(sanitizeInv(inv));
+    const cons=inv.sameC?inv.billing:(inv.consignee||inv.billing);
+    const even=invIdx%2===0;
+    (inv.items||[]).forEach((it,itIdx)=>{
+      _fullRow++;
+      const row=[
+        C_N(_fullRow,dt(0,even)),
+        C_S(inv.no||'',S.INO[even?0:1]),
+        C_S(inv.date||'',dt(1,even)),
+        C_S(inv.method||'',dt(2,even)),
+        C_S(inv.oDate||'',dt(3,even)),
+        C_S(deriveRefLabel(inv.jobType||'Job',inv.customRefLabel),dt(4,even)),
+        C_S(inv.jobNo||'',dt(5,even)),
+        C_S(deriveRefLabel(inv.poType||'PO',inv.poCustomLabel),dt(6,even)),
+        C_S(inv.poNo||'',dt(7,even)),
+        C_S(inv.vessel||'',dt(8,even)),
+        C_S(inv.port||'',dt(9,even)),
+        C_S(inv.veh||'',dt(10,even)),
+        C_S(inv.ewNo||'',dt(11,even)),
+        C_S(inv.ewDt||'',dt(12,even)),
+        C_S(inv.billing?.name||'',dt(13,even)),
+        C_S(inv.billing?.a1||'',dt(14,even)),
+        C_S(inv.billing?.a2||'',dt(15,even)),
+        C_S(inv.billing?.a3||'',dt(16,even)),
+        C_S(inv.billing?.city||'',dt(17,even)),
+        C_S(inv.billing?.state||'',dt(18,even)),
+        C_S(inv.billing?.code||'',dt(19,even)),
+        C_S(inv.billing?.gstin||'',dt(20,even)),
+        C_S(cons?.name||'',dt(21,even)),
+        C_S(cons?.a1||'',dt(22,even)),
+        C_S(cons?.a2||'',dt(23,even)),
+        C_S(cons?.a3||'',dt(24,even)),
+        C_S(cons?.city||'',dt(25,even)),
+        C_S(cons?.state||'',dt(26,even)),
+        C_S(cons?.code||'',dt(27,even)),
+        C_S(cons?.gstin||'',dt(28,even)),
+        C_S(it.sr||String(itIdx+1),dt(29,even)),
+        C_S(it.desc||'',dt(30,even)),
+        C_S(it.hsn||'',dt(31,even)),
+        C_N(it.qty,dn(32,even)),
+        C_N(it.rate,dn(33,even)),
+        C_S(it.per||'',dt(34,even)),
+        C_N(it.amount,dn(35,even)),
+        C_N(it.discount,dn(36,even)),
+        C_N(it.taxable,dn(37,even)),
+        C_N(inv.rc,dn(38,even)),
+        C_N(inv.ins,dn(39,even)),
+        C_N(inv.fr,dn(40,even)),
+        C_N(C.gt,dn(41,even)),
+        C_N(C.sg||0,dn(42,even)),
+        C_N(C.cg||0,dn(43,even)),
+        C_N(C.ig||0,dn(44,even)),
+        C_N(C.tot,dn(45,even)),
+        C_N(C.ro,dn(46,even)),
+        C_N(C.fin,dn(47,even)),
+        C_S(inv.gst==='SC'?'SGST+CGST':inv.gst==='IG'?'IGST':'NIL',dt(48,even)),
+        C_S(inv.cur||'INR',dt(49,even)),
+        C_S(inv.exRate||'',dt(50,even)),
+        C_S(inv.rmk||'',dt(51,even)),
+        C_S(inv.rmkD||'',dt(52,even)),
+      ];
+      ws.addRow(row,16); r++;
+    });
+  });
+
+  const zip=_buildWorkbook([{name:'Full Data',sheet:ws}]);
+  _dlBlob(zip,filename);
+}
+
+// ── REGULAR REPORT EXPORT ─────────────────────────────────────────────────────
+function exportExcel(invListRaw,mFilt,yFilt){
+  const invList=invListRaw.filter(inv=>(inv.no||'').trim()&&(inv.billing?.name||'').trim()).map(sanitizeInv);
+  if(!invList.length){toast('No completed invoices to export.','info');return;}
+
+  let reportTitle='Invoice Report',filename='Invoice_All_Summary.xlsx';
+  if(mFilt&&yFilt){const mn=MONTHS.find(m=>m.v===mFilt)?.l||mFilt;reportTitle=`Invoice Report — ${mn} ${yFilt}`;filename=`Invoice_${mn}-${yFilt}_Summary.xlsx`;}
+  else if(yFilt){reportTitle=`Invoice Report — ${yFilt}`;filename=`Invoice_${yFilt}_Summary.xlsx`;}
+  else if(mFilt){const mn=MONTHS.find(m=>m.v===mFilt)?.l||mFilt;reportTitle=`Invoice Report — ${mn}`;filename=`Invoice_${mn}_Summary.xlsx`;}
+  const genDate=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  // ── Sheet 1: Invoice Summary ──────────────────────────────────────────────
+  const NC1=11;
+  const ws1=new XSheet();
+  ws1.setColWidths([5,18,13,30,22,26,28,20,20,13,18]);
+  let r=buildHeader(ws1,NC1,reportTitle,invList.length,genDate);
+  ws1.addRow(['Sr No','Invoice No','Date','Party Name','Party GSTIN','Vessel / Ship','Port of Service','Job / Ref No','PO / Ref No','GST Type','Final Amount (₹)'].map(h=>C_S(h,S.SUM_HDR)),18);
+  ws1.setFreeze(r+1); r++;
+
+  let grandTotal=0;
+  invList.forEach((inv,idx)=>{
+    const Ci=calcInv(inv);grandTotal+=Ci.fin;
+    const e=idx%2===0;
+    ws1.addRow([
+      C_N(idx+1,e?S.SE_CTR:S.SO_CTR),
+      C_S(inv.no||'',e?S.SE_INO:S.SO_INO),
+      C_S(inv.date||'',e?S.SE_CTR:S.SO_CTR),
+      C_S(inv.billing?.name||'',e?S.SE_WRAP:S.SO_WRAP),
+      C_S(inv.billing?.gstin||'',e?S.SE_TXT:S.SO_TXT),
+      C_S(inv.vessel||'',e?S.SE_WRAP:S.SO_WRAP),
+      C_S(inv.port||'',e?S.SE_WRAP:S.SO_WRAP),
+      C_S(inv.jobNo||'',e?S.SE_TXT:S.SO_TXT),
+      C_S(inv.poNo||'',e?S.SE_TXT:S.SO_TXT),
+      C_S(inv.gst==='SC'?'SGST+CGST':inv.gst==='IG'?'IGST':'NIL',e?S.SE_CTR:S.SO_CTR),
+      C_N(Ci.fin,e?S.SE_FIN:S.SO_FIN),
+    ],16); r++;
+  });
+  // Grand total row
+  ws1.addRow([C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_S('GRAND TOTAL',S.GT_TXT),C_N(grandTotal,S.GT_NUM)],20);
+  r++;
+
+  // ── Sheet 2: Line Items ───────────────────────────────────────────────────
+  const NC2=13;
+  const ws2=new XSheet();
+  ws2.setColWidths([5,18,13,28,5,44,10,8,13,6,15,13,18]);
+  r=buildHeader(ws2,NC2,`${reportTitle} — Line Items`,invList.length,genDate);
+  ws2.addRow(['Sr No','Invoice No','Invoice Date','Party Name','Sr','Description','HSN/SAC','Qty','Rate','Per','Amount (₹)','Discount (₹)','Taxable Value (₹)'].map(h=>C_S(h,S.SUM_HDR)),18);
+  ws2.setFreeze(r+1); r++;
+
+  let _s2Row=0;
+  invList.forEach((inv,invIdx)=>{
+    (inv.items||[]).forEach((it,itIdx)=>{
+      const e=invIdx%2===0;
+      _s2Row++;
+      ws2.addRow([
+        C_N(_s2Row,e?S.SE_CTR:S.SO_CTR),
+        C_S(inv.no||'',e?S.SE_INO:S.SO_INO),
+        C_S(inv.date||'',e?S.SE_CTR:S.SO_CTR),
+        C_S(inv.billing?.name||'',e?S.SE_WRAP:S.SO_WRAP),
+        C_S(it.sr||String(itIdx+1),e?S.SE_CTR:S.SO_CTR),
+        C_S(it.desc||'',e?S.SE_WRAP:S.SO_WRAP),
+        C_S(it.hsn||'',e?S.SE_CTR:S.SO_CTR),
+        C_N(it.qty,e?S.SE_NUM:S.SO_NUM),
+        C_N(it.rate,e?S.SE_NUM:S.SO_NUM),
+        C_S(it.per||'',e?S.SE_CTR:S.SO_CTR),
+        C_N(it.amount,e?S.SE_NUM:S.SO_NUM),
+        C_N(it.discount,e?S.SE_NUM:S.SO_NUM),
+        C_N(it.taxable,e?S.SE_FIN:S.SO_FIN),
+      ],16); r++;
+    });
+  });
+
+  // ── Sheet 3: GST Summary ──────────────────────────────────────────────────
+  const NC3=9;
+  const ws3=new XSheet();
+  ws3.setColWidths([5,18,13,32,20,16,16,16,20]);
+  r=buildHeader(ws3,NC3,`${reportTitle} — GST Summary`,invList.length,genDate);
+  ws3.addRow(['Sr No','Invoice No','Date','Party Name','Taxable Value (₹)','SGST (₹)','CGST (₹)','IGST (₹)','Final Amount (₹)'].map(h=>C_S(h,S.SUM_HDR)),18);
+  ws3.setFreeze(r+1); r++;
+
+  let tT=0,tS=0,tC=0,tI=0,tF=0;
+  invList.forEach((inv,idx)=>{
+    const Ci=calcInv(inv);tT+=Ci.gt;tS+=Ci.sg;tC+=Ci.cg;tI+=Ci.ig;tF+=Ci.fin;
+    const e=idx%2===0;
+    ws3.addRow([
+      C_N(idx+1,e?S.SE_CTR:S.SO_CTR),
+      C_S(inv.no||'',e?S.SE_INO:S.SO_INO),
+      C_S(inv.date||'',e?S.SE_CTR:S.SO_CTR),
+      C_S(inv.billing?.name||'',e?S.SE_WRAP:S.SO_WRAP),
+      C_N(Ci.gt,e?S.SE_NUM:S.SO_NUM),
+      C_N(Ci.sg||0,e?S.SE_NUM:S.SO_NUM),
+      C_N(Ci.cg||0,e?S.SE_NUM:S.SO_NUM),
+      C_N(Ci.ig||0,e?S.SE_NUM:S.SO_NUM),
+      C_N(Ci.fin,e?S.SE_FIN:S.SO_FIN),
+    ],16); r++;
+  });
+  ws3.addRow([C_E(S.GT_TXT),C_E(S.GT_TXT),C_E(S.GT_TXT),C_S('GRAND TOTAL',S.GT_TXT),C_N(tT,S.GT_NUM),C_N(tS,S.GT_NUM),C_N(tC,S.GT_NUM),C_N(tI,S.GT_NUM),C_N(tF,S.GT_NUM)],20);
+
+  const zip=_buildWorkbook([{name:'Invoice Summary',sheet:ws1},{name:'Line Items',sheet:ws2},{name:'GST Summary',sheet:ws3}]);
+  _dlBlob(zip,filename);
+}
+
+function exportFiltered(invs,mFilt,yFilt){exportExcel(invs,mFilt,yFilt);}
+
+
+/* ═══════════════════════════════════════════════
+   DATA EXTRACTORS
+═══════════════════════════════════════════════ */
+const blankParty=()=>({name:'',a1:'',a2:'',a3:'',city:'',state:'',code:'',gstin:''});
+const blankItem=()=>({id:uid(),sr:'',desc:'',hsn:'',qty:'',rate:'',per:'',amount:0,discount:0,taxable:0});
+
+// ── Auto invoice number: NNN/MM/YY-YY ─────────────────────────────────────
+// Fiscal year: Apr(04)–Mar(03). Month 04-12 → current year start, 01-03 → prev year start.
+function fiscalYearStr(isoDate){
+  const d=new Date(isoDate||Date.now());
+  const y=d.getFullYear(),m=d.getMonth()+1; // 1-12
+  const startY=m>=4?y:y-1;
+  return`${String(startY).slice(2)}-${String(startY+1).slice(2)}`;// e.g. "26-27"
+}
+function nextInvNo(invs){
+  const mm=String(new Date().getMonth()+1).padStart(2,'0');
+  const fy=fiscalYearStr();
+  // Find all invoices with format NNN/MM/YY-YY that match current month+FY
+  const pattern=new RegExp(`^(\\d+)/${mm}/${fy.replace('-','\\-')}$`);
+  let maxSerial=0;
+  (invs||[]).forEach(inv=>{
+    const m=(inv.no||'').match(pattern);
+    if(m)maxSerial=Math.max(maxSerial,parseInt(m[1],10));
+  });
+  // Also check any invoice this fiscal year to find highest serial regardless of month
+  const fyPattern=new RegExp(`^(\\d+)/\\d{2}/${fy.replace('-','\\-')}$`);
+  (invs||[]).forEach(inv=>{
+    const m=(inv.no||'').match(fyPattern);
+    if(m)maxSerial=Math.max(maxSerial,parseInt(m[1],10));
+  });
+  const serial=String(maxSerial+1).padStart(3,'0');
+  return`${serial}/${mm}/${fy}`;
+}
+
+const newInv=(invs)=>({id:uid(),no:nextInvNo(invs),date:today(),jobNo:'',jobType:'Job',poNo:'',poType:'PO',
+  customRefLabel:'',poCustomLabel:'',
+  oDate:today(),method:'',vessel:'',
+  port:'',billing:blankParty(),sameC:true,consignee:blankParty(),
+  items:[blankItem()],rc:0,ins:0,fr:0,gst:'',cur:'',exRate:'',rmk:'',rmkD:'',veh:'',ewNo:'',ewDt:''});
+
+function extractParties(invs){
+  const m={};
+  invs.forEach(inv=>{
+    [inv.billing,!inv.sameC?inv.consignee:null].filter(Boolean)
+      .forEach(p=>{if(p?.name?.trim())m[p.gstin||p.name]={...p};});
+  });
+  return Object.values(m);
+}
+function extractShips(invs){
+  const s=new Set();
+  invs.forEach(i=>{const v=(i.vessel||'').trim();if(v.length>2)s.add(v);});
+  return[...s];
+}
+function extractDescs(invs){
+  const s=new Set();
+  invs.forEach(i=>(i.items||[]).forEach(it=>{
+    const d=(it.desc||'').trim();
+    if(d.length>=3)s.add(d);  // min 3 chars to be useful
+  }));
+  // Sort: shorter first (more likely to be exact matches at top)
+  return[...s].sort((a,b)=>a.length-b.length);
+}
+
+/* ═══════════════════════════════════════════════
+   EXCEL → INVOICES  (reads Full Export format)
+   Detects the header row dynamically, maps columns
+   by name — no hard-coded column indices.
+═══════════════════════════════════════════════ */
+function xlsxToInvoices(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=reject;
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'binary',cellDates:true});
+        // Prefer 'Full Data' sheet (our own Full Export), else first sheet
+        const wsName=wb.SheetNames.includes('Full Data')?'Full Data':wb.SheetNames[0];
+        const ws=wb.Sheets[wsName];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+
+        // ── Find header row (first row where any cell is exactly "Invoice No") ──
+        let hdrRow=-1;
+        for(let i=0;i<Math.min(rows.length,15);i++){
+          if(rows[i].some(v=>String(v||'').trim().toLowerCase()==='invoice no')){hdrRow=i;break;}
+        }
+        if(hdrRow<0){
+          reject(new Error('No "Invoice No" column found. Please import a Full Report (.xlsx) file exported from this app.'));
+          return;
+        }
+
+        // ── Build name→index map from header row ──
+        const hdrCells=rows[hdrRow].map(v=>String(v||'').trim().toLowerCase());
+        const ci=name=>{const i=hdrCells.indexOf(name.toLowerCase());return i>=0?i:-1;};
+        const gc=(r,name,fb='')=>{const i=ci(name);return i>=0?clean(r[i]):(fb);};
+        const gn=(r,name)=>{const i=ci(name);if(i<0)return 0;const v=String(r[i]||'').replace(/,/g,'');return parseFloat(v)||0;};
+        const gnQty=s=>{const m=String(s||'').match(/[\d.]+/);return m?parseFloat(m[0])||0:0;};
+
+        // ── Process data rows ──
+        const invoiceMap={};
+        const order=[];
+
+        // Build a last-seen-key map so continuation rows (no date) find their parent invoice
+        const lastKeyByNo={};
+
+        rows.slice(hdrRow+1).forEach(r=>{
+          const no=gc(r,'invoice no');
+          // Skip blank rows AND group-label rows (e.g. "A — Invoice Info")
+          if(!no||/^[A-F]\s*[—–-]/.test(no))return;
+
+          // For continuation rows (no date), reuse the last key seen for this invoice number
+          const rawDate=gc(r,'invoice date');
+          const invDate=fmtDate(rawDate)||(lastKeyByNo[no]?null:today());
+          const key=invDate?`${no}__${invDate}`:(lastKeyByNo[no]||`${no}__${today()}`);
+
+          if(!invoiceMap[key]){
+            order.push(key);
+            const bName=gc(r,'billing name');
+            const bGstin=gc(r,'billing gstin');
+            const billing={
+              name:bName,
+              a1:gc(r,'billing addr 1'),a2:gc(r,'billing addr 2'),a3:gc(r,'billing addr 3'),
+              city:gc(r,'billing city'),state:gc(r,'billing state'),
+              code:gc(r,'billing code'),gstin:bGstin,
+            };
+            const cName=gc(r,'consignee name');
+            const cGstin=gc(r,'cons gstin');
+            const consignee={
+              name:cName||bName,
+              a1:gc(r,'cons addr 1')||billing.a1,a2:gc(r,'cons addr 2')||billing.a2,
+              a3:gc(r,'cons addr 3')||billing.a3,
+              city:gc(r,'cons city')||billing.city,state:gc(r,'cons state')||billing.state,
+              code:gc(r,'cons code')||billing.code,gstin:cGstin||bGstin,
+            };
+            // sameC: no consignee name, OR both name AND GSTIN match billing
+            const sameC=!cName||(cName.trim().toLowerCase()===bName.trim().toLowerCase()&&(!cGstin||cGstin===bGstin));
+            const gstRaw=gc(r,'gst type').trim().toUpperCase();
+            const gst=gstRaw.includes('IGST')||gstRaw==='IG'?'IG':
+                       gstRaw.includes('NIL')||gstRaw==='NL'?'NL':'SC';
+
+            // Clean up exRate: treat '1' or '1.0' as blank for INR invoices
+            const curVal=gc(r,'currency')||'INR';
+            const exRateRaw=gc(r,'exchange rate');
+            const exRateClean=(curVal==='INR'&&(exRateRaw===''||exRateRaw==='1'||exRateRaw==='1.0'||parseFloat(exRateRaw)===1))?'':exRateRaw;
+
+            lastKeyByNo[no]=key;
+            invoiceMap[key]=sanitizeInv({
+              id:uid(),no,date:invDate,
+              method:gc(r,'order ref / method')||gc(r,'order method')||'E-MAIL',
+              oDate:fmtDate(gc(r,'order date'))||today(),
+              jobNo:gc(r,'job no / appt no')||gc(r,'job no'),
+              jobType:gc(r,'job type')||'Job No.',
+              poNo:gc(r,'po no'),poType:gc(r,'po type')||'PO No.',
+              customRefLabel:'',poCustomLabel:'',
+              vessel:gc(r,'vessel name'),
+              port:gc(r,'port of service')||'',
+              veh:gc(r,'vehicle no'),
+              ewNo:gc(r,'e-way bill no'),
+              ewDt:fmtDate(gc(r,'e-way bill date'))||'',
+              billing,sameC,consignee:sameC?blankParty():consignee,
+              items:[],
+              rc:gn(r,'rev charges (₹)'),
+              ins:gn(r,'insurance (₹)'),
+              fr:gn(r,'freight (₹)'),
+              gst,
+              cur:curVal,
+              exRate:exRateClean,
+              rmk:gc(r,'remarks heading'),
+              rmkD:gc(r,'remarks details'),
+            });
+          }
+
+          // ── Append item ──
+          const _qtyRaw=gc(r,'qty');
+          // Extract numeric qty from embedded-unit strings like '20.700 MTS', '5.3cbm', 'UP TO 4 CBM'
+          const _qtyNum=gnQty(_qtyRaw);
+          const item={
+            id:uid(),
+            sr:gc(r,'sr'),
+            desc:gc(r,'description'),
+            hsn:gc(r,'hsn/sac'),
+            qty:_qtyNum>0?String(_qtyNum):(_qtyRaw||''),
+            rate:gc(r,'rate'),
+            per:gc(r,'per'),
+            amount:gn(r,'amount (₹)'),
+            discount:gn(r,'discount (₹)'),
+            taxable:gn(r,'taxable value (₹)'),
+          };
+          if(item.desc||item.amount)invoiceMap[key].items.push(item);
+        });
+
+        const result=order
+          .map(k=>invoiceMap[k])
+          .filter(inv=>inv.no&&inv.billing?.name)
+          .map(inv=>{if(!inv.items.length)inv.items=[blankItem()];return inv;});
+
+        resolve(result);
+      }catch(err){reject(err);}
+    };
+    reader.readAsBinaryString(file);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════ */
+let _toastFn=null;
+function useToast(){
+  const[toasts,setToasts]=useState([]);
+  _toastFn=useCallback((msg,type='info')=>{
+    const id=uid();
+    setToasts(p=>[...p.slice(-3),{id,msg,type}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3000);
+  },[]);
+  return toasts;
+}
+const toast=(m,t='info')=>_toastFn&&_toastFn(m,t);
+
+/* ═══════════════════════════════════════════════
+   SMART SELECT (identical to State/GST dropdown)
+═══════════════════════════════════════════════ */
+function SmartSelect({value,options,onChange,placeholder}){
+  const inList=options.includes(value);
+  const[cust,setCust]=useState(!inList&&!!value);
+  useEffect(()=>{if(options.includes(value))setCust(false);else if(value&&!options.includes(value))setCust(true);},[value,options]);
+  if(cust)return(
+    <div style={{display:'flex',gap:5}}>
+      <input value={value||''} onChange={e=>onChange(e.target.value)} placeholder="Enter custom value…"/>
+      <button type="button" className="btn btn-ghost btn-xs" title="Back to list"
+        onClick={()=>{setCust(false);onChange(options[0]||'');}} style={{flexShrink:0}}>✕</button>
+    </div>
+  );
+  return(
+    <select value={inList?value:''} onChange={e=>{
+      if(e.target.value==='__cust__'){setCust(true);onChange('');}else onChange(e.target.value);
+    }}>
+      {(!value||!inList)&&<option value="" disabled={!!value}>{placeholder||'— Select —'}</option>}
+      {options.map(o=><option key={o} value={o}>{o}</option>)}
+      <option value="__cust__">── Custom… ──</option>
+    </select>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   GENERIC AUTOCOMPLETE — party, vessel, description
+   Fixed: portal close-before-select, correct fixed-
+   position coords, scroll tracking, minLen=1 default,
+   stopPropagation prevents doc-handler race condition.
+═══════════════════════════════════════════════ */
+function ACInput({value,suggestions,onChange,onSelect,placeholder,renderItem,minLen=1,rows}){
+  const[open,setOpen]=useState(false);
+  const[hi,setHi]=useState(-1);
+  const[dropPos,setDropPos]=useState({top:0,left:0,width:0});
+  const wrapRef=useRef();   // the ac-wrap div
+  const inputRef=useRef();  // the actual input/textarea
+  const dropRef=useRef();   // the portal dropdown div
+
+  // ── Filter suggestions ─────────────────────────────
+  const filtered=useMemo(()=>{
+    // Always show suggestions on focus if no value; otherwise filter
+    const arr=Array.isArray(suggestions)?suggestions:[];
+    if(!value&&minLen>0)return[];
+    if(value&&value.length<minLen)return[];
+    const q=(value||'').toLowerCase().trim();
+    if(!q)return arr.slice(0,12);
+    return arr.filter(s=>{
+      const txt=typeof s==='string'?String(s):String(s?.name||s?.desc||'');
+      return txt.toLowerCase().includes(q);
+    }).slice(0,12);
+  },[value,suggestions,minLen]);
+
+  // ── Compute drop position (viewport coords for position:fixed) ──
+  // FIX: do NOT add scrollY/scrollX — position:fixed is viewport-relative
+  function recalcPos(){
+    if(!inputRef.current)return;
+    const r=inputRef.current.getBoundingClientRect();
+    setDropPos({
+      top: r.bottom+3,          // viewport Y, no scrollY offset
+      left: r.left,             // viewport X, no scrollX offset
+      width: Math.max(r.width,260),
+    });
+  }
+
+  // Recompute on open and whenever value changes (textarea resizes)
+  useEffect(()=>{if(open)recalcPos();},[open,value]);
+
+  // Track scroll / resize while open so dropdown follows the input
+  useEffect(()=>{
+    if(!open)return;
+    const update=()=>recalcPos();
+    window.addEventListener('scroll',update,true);  // capture = catches all scrolling ancestors
+    window.addEventListener('resize',update);
+    return()=>{
+      window.removeEventListener('scroll',update,true);
+      window.removeEventListener('resize',update);
+    };
+  },[open]);
+
+  // ── Outside-click: close only if click is outside BOTH wrap and dropdown ──
+  // FIX: portal dropdown is in document.body, so wrapRef.contains(target) is always
+  // false for it — we must also check dropRef to prevent premature close.
+  useEffect(()=>{
+    function handleDown(e){
+      const inWrap=wrapRef.current&&wrapRef.current.contains(e.target);
+      const inDrop=dropRef.current&&dropRef.current.contains(e.target);
+      if(!inWrap&&!inDrop)setOpen(false);
+    }
+    document.addEventListener('mousedown',handleDown);
+    return()=>document.removeEventListener('mousedown',handleDown);
+  },[]);
+
+  // ── Keyboard navigation ──────────────────────────
+  function kd(e){
+    if(e.key==='ArrowDown'&&open){e.preventDefault();setHi(i=>Math.min(i+1,filtered.length-1));}
+    else if(e.key==='ArrowUp'&&open){e.preventDefault();setHi(i=>Math.max(i-1,0));}
+    else if(e.key==='Enter'){
+      // Prevent default so no newline is inserted (newline fires onChange which re-opens suggestions)
+      e.preventDefault();
+      if(open&&hi>=0){onSelect(filtered[hi]);setOpen(false);setHi(-1);}
+      else{setOpen(false);}
+      // Event still bubbles to handleFormKeyDown for field navigation
+    }
+    else if(e.key==='Escape'){e.preventDefault();setOpen(false);}
+  }
+
+  // ── Dropdown portal ──────────────────────────────
+  // FIX: stopPropagation on mousedown prevents the document handler above from
+  // firing and closing the dropdown before onSelect runs.
+  // FIX: preventDefault prevents the input from losing focus on click.
+  const dropEl=open&&filtered.length>0?(
+    <div ref={dropRef} style={{
+      position:'fixed',          // viewport-relative, escapes all overflow:hidden
+      zIndex:99999,
+      top:dropPos.top,
+      left:dropPos.left,
+      width:dropPos.width,
+      background:'var(--card)',
+      border:'1.5px solid var(--border2)',
+      borderRadius:'var(--rl)',
+      boxShadow:'var(--shadow-lg)',
+      maxHeight:240,
+      overflowY:'auto',
+    }}>
+      {filtered.map((s,i)=>(
+        <div key={i}
+          className={`ac-item${hi===i?' hi':''}`}
+          onMouseDown={e=>{
+            e.preventDefault();       // keep input focused, no blur
+            e.stopPropagation();      // stop doc listener from closing dropdown
+            onSelect(s);
+            setOpen(false);
+            setHi(-1);
+          }}
+          onMouseEnter={()=>setHi(i)}>
+          {renderItem
+            ?renderItem(s)
+            :<span className="ac-name">{typeof s==='string'?s:s.name||String(s)}</span>
+          }
+        </div>
+      ))}
+    </div>
+  ):null;
+
+  const Input=rows?'textarea':'input';
+
+  return(
+    <div ref={wrapRef} className="ac-wrap" style={{position:'relative'}}>
+      <Input
+        ref={inputRef}
+        rows={rows}
+        value={value||''}
+        onChange={e=>{onChange(e.target.value);setOpen(true);setHi(-1);}}
+        onFocus={()=>{recalcPos();setOpen(true);}}
+        onKeyDown={kd}
+        placeholder={placeholder}
+        autoComplete="off"
+        style={rows?{minWidth:'100%',fontSize:'12px',resize:'vertical'}:undefined}
+      />
+      {/* Portal: render dropdown directly into body to escape overflow:hidden tables */}
+      {dropEl&&typeof document!=='undefined'
+        ?ReactDOM.createPortal(dropEl,document.body)
+        :dropEl}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   REF FIELD — unified type dropdown + value input
+   Used for: Job/Appointment/Custom and PO/WO/Custom
+═══════════════════════════════════════════════ */
+function RefField({typeOptions,typeValue,onTypeChange,value,onValueChange,
+                   customLabel,onCustomLabelChange,placeholder}){
+  const isCustom=typeValue==='Custom';
+  return(
+    <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:'6px',alignItems:'flex-start'}}>
+      {/* Type selector */}
+      <div style={{minWidth:'110px',maxWidth:'140px'}}>
+        <select value={typeValue||typeOptions[0]?.value||''} onChange={e=>onTypeChange(e.target.value)}
+          style={{width:'100%',fontWeight:600}}>
+          {typeOptions.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      {/* Value input (+ optional custom label inline) */}
+      <div style={{display:'flex',gap:5,minWidth:0}}>
+        {isCustom&&(
+          <input value={customLabel||''} onChange={e=>onCustomLabelChange(e.target.value)}
+            placeholder="Label…" style={{width:'80px',flexShrink:0}}/>
+        )}
+        <input value={value||''} onChange={e=>onValueChange(e.target.value)}
+          placeholder={isCustom?'Value…':(placeholder||'Reference number…')}
+          style={{flex:1,minWidth:0}}/>
+      </div>
+    </div>
+  );
+}
+
+// Derive the display label for a ref field given type + customLabel
+function refLabel(type,customLabel,typeOptions){
+  if(type==='Custom')return customLabel||'Ref';
+  return typeOptions.find(o=>o.value===type)?.label||type||'';
+}
+
+/* ── Unified Reference Type Options ── */
+const REF_TYPE_OPTIONS=[
+  {value:'Job',      label:'Job No.'},
+  {value:'PO',       label:'PO No.'},
+  {value:'Appointment', label:'Appointment No.'},
+  {value:'Custom',   label:'Custom…'},
+];
+
+// Derive print label from type + optional custom label
+// Handles legacy 'WO' type gracefully
+function deriveRefLabel(type,customLabel){
+  if(!type||type==='Job')return'Job No.';
+  if(type==='PO')return'PO No.';
+  if(type==='Appointment')return'Appointment No.';
+  if(type==='WO')return'Work Order No.';// backward compat
+  if(type==='Custom')return(customLabel||'Ref');
+  return type;
+}
+
+function PartyForm({p,onChange,parties}){
+  const sf=(f,v)=>onChange({...p,[f]:v});
+  const onState=sn=>{const c=STATE_CODE[sn];onChange({...p,state:sn,code:c||p.code});};
+  const onCode=c=>{const sn=CODE_STATE[c];onChange({...p,code:c,state:sn||p.state});};
+  return(
+    <div>
+      <div style={{marginBottom:12}}>
+        <label className="lbl">Party Name *</label>
+        <ACInput value={p.name} suggestions={parties} minLen={1} placeholder="Type name to search or enter new…"
+          onChange={v=>sf('name',v)}
+          onSelect={sel=>onChange({...p,...sel})}
+          renderItem={s=><><div className="ac-name">{s.name}</div><div className="ac-sub">{[s.city,s.state].filter(Boolean).join(', ')}{s.gstin?` · ${s.gstin}`:''}</div></>}/>
+      </div>
+      <div className="g2">
+        <div><label className="lbl">Address Line 1</label><input value={p.a1||''} onChange={e=>sf('a1',e.target.value)} placeholder="Street / Survey No."/></div>
+        <div><label className="lbl">Address Line 2</label><input value={p.a2||''} onChange={e=>sf('a2',e.target.value)} placeholder="Area / Locality"/></div>
+        <div><label className="lbl">Address Line 3</label><input value={p.a3||''} onChange={e=>sf('a3',e.target.value)} placeholder="Landmark / District"/></div>
+        <div><label className="lbl">City</label><input value={p.city||''} onChange={e=>sf('city',e.target.value)} placeholder="City"/></div>
+        <div><label className="lbl">State</label><SmartSelect value={p.state||''} options={STATE_NAMES} onChange={onState} placeholder="— Select State —"/></div>
+        <div><label className="lbl">GST State Code</label><SmartSelect value={p.code||''} options={STATE_CODES} onChange={onCode} placeholder="— Code —"/></div>
+        <div className="sp2"><label className="lbl">GSTIN</label>
+          <input value={p.gstin||''} onChange={e=>sf('gstin',e.target.value)} placeholder="e.g. 24ABCDE1234F1Z5" style={{letterSpacing:'.04em'}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   SETTINGS MODAL
+═══════════════════════════════════════════════ */
+function SettingsModal({onClose,invs,onClearAll,fsFileName,onPickFile,logo,onLogoChange,showFiltTotal,onToggleFiltTotal,showEmptyFields,onToggleShowEmptyFields,enableFullExcel,onToggleFullExcel,dateFmt,onDateFmt,onImportBackup}){
+  const[cfm,setCfm]=useState(false);
+  const[showBackupInfo,setShowBackupInfo]=useState(false);
+  const[showGuide,setShowGuide]=useState(false);
+  const logoRef=useRef();
+
+  function uploadLogo(e){
+    const f=e.target.files[0];if(!f)return;
+    if(f.size>600000){toast('Logo file is too large. Please use an image under 600KB.','error');return;}
+    const r=new FileReader();
+    r.onload=ev=>{onLogoChange(ev.target.result);toast('Logo saved!','success');};
+    r.readAsDataURL(f);
+  }
+
+  // Inline info panel
+  function InfoPanel({show,children}){
+    if(!show)return null;
+    return(
+      <div style={{margin:'8px 0 12px',padding:'13px 14px',background:'#EFF6FF',border:'1.5px solid #93C5FD',
+        borderRadius:'var(--r)',fontSize:'12px',color:'#1E3A8A',lineHeight:1.75}}>
+        {children}
+      </div>
+    );
+  }
+  // ℹ circle button
+  function IBtn({onClick,active}){
+    return(
+      <button onClick={onClick} style={{flexShrink:0,width:'20px',height:'20px',borderRadius:'50%',
+        border:`1.5px solid ${active?'var(--accent)':'var(--border2)'}`,background:active?'var(--accent)':'none',
+        color:active?'#fff':'var(--text3)',fontSize:'11px',fontWeight:700,cursor:'pointer',
+        display:'inline-flex',alignItems:'center',justifyContent:'center',padding:0,lineHeight:1}}>ℹ</button>
+    );
+  }
+
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+          <h3 style={{fontSize:'16px',fontWeight:700}}>⚙ Settings</h3>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Logo */}
+        <div className="sec-title">Company Logo</div>
+        <div style={{display:'flex',alignItems:'center',gap:'14px',marginBottom:'18px'}}>
+          <div style={{width:72,height:72,border:'2px dashed var(--border2)',borderRadius:var_r,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg3)',flexShrink:0,overflow:'hidden',cursor:'pointer'}}
+            onClick={()=>logoRef.current.click()}>
+            {logo?<img src={logo} style={{width:'100%',height:'100%',objectFit:'contain'}} alt="logo"/>
+              :<span style={{fontSize:'11px',color:'var(--text3)',textAlign:'center',padding:'4px'}}>Click to upload</span>}
+          </div>
+          <div>
+            <div style={{fontSize:'13px',marginBottom:'8px',color:'var(--text2)'}}>Logo appears in invoice header. Max 600KB. PNG/JPG recommended.</div>
+            <div style={{display:'flex',gap:'8px'}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>logoRef.current.click()}>📷 Upload Logo</button>
+              {logo&&<button className="btn btn-danger btn-sm" onClick={()=>onLogoChange('')}>Remove</button>}
+            </div>
+          </div>
+        </div>
+        <input ref={logoRef} type="file" accept="image/*" style={{display:'none'}} onChange={uploadLogo}/>
+
+        {/* Date Format */}
+        <div className="sec-title">Date Format</div>
+        <div style={{marginBottom:'20px',padding:'12px 13px',background:'var(--bg3)',borderRadius:'var(--r)'}}>
+          <div style={{fontSize:'12px',color:'var(--text2)',marginBottom:'10px',fontWeight:600}}>How dates appear in the app and all exports</div>
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+            {[['DMY','DD/MM/YYYY','e.g. 20/04/2026'],['YMD','YYYY-MM-DD','e.g. 2026-04-20']].map(([val,label,example])=>(
+              <label key={val} onClick={()=>onDateFmt(val)} style={{
+                display:'flex',alignItems:'center',gap:'10px',cursor:'pointer',flex:1,minWidth:'150px',
+                padding:'10px 13px',borderRadius:'var(--r)',fontSize:'13px',
+                border:`2px solid ${dateFmt===val?'var(--accent)':'var(--border)'}`,
+                background:dateFmt===val?'var(--accent-lt)':'var(--bg2)',transition:'all .15s'}}>
+                <div style={{width:16,height:16,borderRadius:'50%',flexShrink:0,
+                  border:`2px solid ${dateFmt===val?'var(--accent)':'var(--border2)'}`,
+                  background:dateFmt===val?'var(--accent)':'transparent',
+                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  {dateFmt===val&&<div style={{width:6,height:6,borderRadius:'50%',background:'#fff'}}/>}
+                </div>
+                <div>
+                  <div style={{fontWeight:700}}>{label}</div>
+                  <div style={{fontSize:'11px',color:'var(--text3)'}}>{example}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Display Options */}
+        <div className="sec-title">Display Options</div>
+        {[
+          [showFiltTotal,onToggleFiltTotal,'Show Filtered Total','Display total amount of filtered invoices — limited to a single month, year, or fiscal year (not multi-year). Select a specific period first to see an accurate income total.'],
+          [showEmptyFields,onToggleShowEmptyFields,'Show Empty Fields in Invoice','Display all fields even when blank — shows "—" as placeholder'],
+          [enableFullExcel,onToggleFullExcel,'Enable Full Excel Export','Enables "Export as Report" — all fields, one row per item. Good for analysis &amp; re-import.'],
+        ].map(([val,fn,title,desc])=>(
+          <label key={title} style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px',cursor:'pointer',
+            padding:'10px 13px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:'13px'}}>
+            <input type="checkbox" checked={!!val} onChange={fn} style={{accentColor:'var(--accent)',width:'auto'}}/>
+            <div><div style={{fontWeight:600}}>{title}</div>
+              <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'2px'}} dangerouslySetInnerHTML={{__html:desc}}/></div>
+          </label>
+        ))}
+
+        {/* Data Storage */}
+        <div style={{display:'flex',alignItems:'center',gap:'8px',margin:'18px 0 10px'}}>
+          <span className="sec-title" style={{margin:0}}>Data Storage &amp; Backup</span>
+          <IBtn onClick={()=>setShowBackupInfo(v=>!v)} active={showBackupInfo}/>
+        </div>
+
+        <InfoPanel show={showBackupInfo}>
+          <div style={{fontWeight:700,fontSize:'13px',marginBottom:'8px'}}>💾 Backup &amp; Restore Guide</div>
+          <div style={{marginBottom:'5px'}}><b>🔄 Auto Backup:</b> Every time you press <b>Save &amp; Preview</b>, a file named <code style={{background:'rgba(30,58,138,.1)',padding:'1px 5px',borderRadius:'3px',fontFamily:'monospace'}}>Invoice_Backup_YYYY-MM-DD.json</code> downloads automatically.</div>
+          <div style={{marginBottom:'5px'}}><b>📦 Manual Backup:</b> Tap <b>Backup Now</b> below any time to get a fresh copy of all invoices.</div>
+          <div style={{marginBottom:'5px'}}><b>⬆ Import / Restore:</b> Tap <b>Import Backup</b> below (or the <b>⬇ Import</b> button on the home screen) → pick any <code style={{background:'rgba(30,58,138,.1)',padding:'1px 5px',borderRadius:'3px',fontFamily:'monospace'}}>Invoice_Backup_*.json</code> file → invoices merge in. Duplicates are skipped.</div>
+          <div style={{marginBottom:'5px'}}><b>📂 Where to keep backups:</b> Save to Google Drive, email to yourself, or WhatsApp "Saved Messages" — so you can restore on any device.</div>
+          <div style={{fontSize:'11px',color:'#2563EB',marginTop:'8px',borderTop:'1px solid #BFDBFE',paddingTop:'8px'}}>Your data is never sent to any server. Everything stays on your device only.</div>
+        </InfoPanel>
+
+        <div style={{marginBottom:'10px',padding:'10px 13px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:'12px'}}>
+          <div style={{fontWeight:600,marginBottom:'3px'}}>🗄️ 3-Layer Storage Active</div>
+          <div style={{color:'var(--text3)'}}>IndexedDB (primary) + localStorage (mirror) {fsFileName?<span style={{color:'var(--success)'}}> + ✔ {fsFileName}</span>:<span style={{color:'var(--warn)'}}> + no linked file</span>}</div>
+        </div>
+
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'6px'}}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{dlBackup(invs);toast('Backup downloaded!','success');}}>📦 Backup Now</button>
+          <button className="btn btn-ghost btn-sm" onClick={onImportBackup}>⬆ Import Backup</button>
+          <button className="btn btn-ghost btn-sm" onClick={onPickFile}>📁 Link JSON File</button>
+        </div>
+        <div style={{fontSize:'11px',color:'var(--text3)',marginBottom:'20px'}}>
+          Backup downloads to your Downloads folder · Import merges without overwriting existing data
+        </div>
+
+        {/* Danger Zone */}
+        <div className="sec-title">Danger Zone</div>
+        {!cfm
+          ?<button className="btn btn-danger btn-sm" style={{marginBottom:'20px'}} onClick={()=>setCfm(true)}>🗑 Clear All Invoices ({invs.length})</button>
+          :<div style={{padding:'12px',background:'var(--danger-bg)',borderRadius:'var(--r)',fontSize:'13px',marginBottom:'20px'}}>
+            <div style={{fontWeight:600,color:'var(--danger)',marginBottom:'10px'}}>⚠ Delete ALL {invs.length} invoices permanently?</div>
+            <div style={{display:'flex',gap:'8px'}}>
+              <button className="btn btn-danger btn-sm" onClick={()=>{onClearAll();setCfm(false);}}>Yes, Delete All</button>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setCfm(false)}>Cancel</button>
+            </div>
+          </div>}
+
+        {/* App Guide */}
+        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
+          <span className="sec-title" style={{margin:0}}>How This App Works</span>
+          <IBtn onClick={()=>setShowGuide(v=>!v)} active={showGuide}/>
+          <button className="btn btn-ghost btn-sm" style={{marginLeft:'auto',fontSize:'11px'}} onClick={()=>setShowGuide(v=>!v)}>
+            {showGuide?'▲ Hide':'📖 Guide'}
+          </button>
+        </div>
+
+        <InfoPanel show={showGuide}>
+          <div style={{fontWeight:700,fontSize:'14px',marginBottom:'14px',borderBottom:'1px solid var(--border)',paddingBottom:'8px'}}>📖 App Guide — Company Invoice Invoice App</div>
+
+          {/* Creating */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>🧾 Creating an Invoice</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              Tap <b>+ New Invoice</b>. The invoice number is auto-filled — e.g. <code style={{background:'var(--bg3)',padding:'1px 5px',borderRadius:'3px',fontFamily:'monospace'}}>003/04/26-27</code> means serial 3, April, FY 2026-27.<br/>
+              Fill in: <b>Invoice Details</b> (date, order method, port, vessel, job/PO refs) → <b>Billing Party</b> → <b>Items</b> (description, qty, rate, HSN) → <b>GST type</b> → tap <b>Save &amp; Preview</b>.<br/>
+              Saving automatically downloads a JSON backup to your Downloads folder.
+            </div>
+          </div>
+
+          {/* Invoice number */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>🔢 Invoice Number Format</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              Format: <code style={{background:'var(--bg3)',padding:'1px 5px',borderRadius:'3px',fontFamily:'monospace'}}>NNN / MM / YY-YY</code> = Serial / Month / Fiscal Year.<br/>
+              Fiscal year runs <b>April → March</b>. April 2026 = <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:'3px',fontFamily:'monospace'}}>26-27</code>, January 2027 = still <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:'3px',fontFamily:'monospace'}}>26-27</code>, April 2027 = <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:'3px',fontFamily:'monospace'}}>27-28</code>.<br/>
+              Serial number resets to 001 each new fiscal year and is shared across all months.
+            </div>
+          </div>
+
+          {/* Items & GST */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>🧮 Items, Tax &amp; Amounts</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              Each item has: Sr, Description, HSN/SAC code, Qty × Rate = Amount. Discount is subtracted to get Taxable Value.<br/>
+              <b>GST types:</b> <b>SGST+CGST 9%+9%</b> (intra-state, Gujarat clients) · <b>IGST 18%</b> (inter-state) · <b>NIL</b> (exports/exempt).<br/>
+              GST type auto-switches to IGST when you pick a non-Gujarat billing party. Rounding off is applied automatically.<br/>
+              <b>Foreign currency:</b> Set Currency + Exchange Rate — the invoice shows amounts in both foreign currency and ₹.
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>🔍 Filtering &amp; Search</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              <b>Month + Year</b> dropdowns filter together (e.g. April 2026). Use "All Months" or "All Years" to widen.<br/>
+              <b>FY dropdown</b> filters by full fiscal year (Apr–Mar) — selecting FY clears Month/Year and vice versa.<br/>
+              <b>Search bar</b> searches across invoice number, party name, vessel, port, and job number simultaneously.<br/>
+              Filters combine: set FY 20-21 + search "GAC" to see all GAC invoices in that fiscal year.<br/>
+              <b>Show Filtered Total</b> (Display Options) shows the ₹ income total — use it with a single period selected.
+            </div>
+          </div>
+
+          {/* Export */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>📊 Exporting Reports</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              All exports use the <b>currently filtered</b> invoices. Set filters first, then export.<br/>
+              • <b>🖨 Print Summary</b> — landscape A4 table, opens print dialog instantly.<br/>
+              • <b>📊 Export as Summary</b> — Excel with 3 sheets: Invoice Summary, Line Items, GST Summary.<br/>
+              • <b>📋 Export as Report</b> — full Excel, one row per item, all 54 fields. Use for re-import or analysis. Enable in Display Options first.<br/>
+              • <b>📦 Export as JSON</b> — raw backup of filtered invoices. Use this to restore on another device.<br/>
+              Export filenames include the filter period — e.g. <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:'3px',fontFamily:'monospace'}}>Invoice_FY20-21_Report.xlsx</code>.
+            </div>
+          </div>
+
+          {/* Printing */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>🖨 Printing Invoices</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              Open any invoice → tap <b>Print</b>. Toggle <b>📋 Duplicate</b> to print Original + Duplicate copy on one A4 sheet (two half-pages).<br/>
+              The printed invoice includes: party details, consignee, vessel, items table, GST breakdown, amount in words, and your company logo if uploaded in Settings.
+            </div>
+          </div>
+
+          {/* Import */}
+          <div style={{marginBottom:'13px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>⬇ Importing Data</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              Tap <b>⬇ Import</b> on the home screen. Accepts two formats:<br/>
+              • <b>.json</b> — any Invoice Backup file. Merges into existing data, duplicates skipped.<br/>
+              • <b>.xlsx</b> — Full Report Excel (exported from this app or the original draft format). Reads all 54 fields including dates, items, parties.<br/>
+              Dates in DD/MM/YYYY format (from the draft file) are parsed automatically.
+            </div>
+          </div>
+
+          {/* Undo & Storage */}
+          <div style={{marginBottom:'4px'}}>
+            <div style={{fontWeight:700,fontSize:'12px',color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'5px'}}>↩ Undo &amp; 💾 Storage</div>
+            <div style={{color:'var(--text2)',fontSize:'12px',lineHeight:1.65}}>
+              <b>Undo</b> restores the last 4 states of your invoice list — useful after accidental deletes or edits.<br/>
+              <b>Storage</b> uses 3 layers: IndexedDB (primary, large capacity) + localStorage (fast mirror) + optional linked JSON file (manual save via <b>Link JSON File</b>). Data never leaves your device — no server, no cloud sync.
+            </div>
+          </div>
+        </InfoPanel>
+
+        <div style={{marginTop:'16px',paddingTop:'14px',borderTop:'1px solid var(--border)',fontSize:'11px',color:'var(--text4)',textAlign:'center'}}>
+          Developer:&nbsp;<a href="https://github.com/meetpalan-dev" target="_blank" rel="noreferrer"
+            style={{color:'var(--accent)',textDecoration:'none',fontWeight:600}}>Meet Palan ↗</a>
+          &nbsp;·&nbsp;Company Invoice Invoice App
+        </div>
+      </div>
+    </div>
+  );
+}
+const var_r='var(--r)';
+
+/* ═══════════════════════════════════════════════
+   INVOICE PRINT TEMPLATE
+═══════════════════════════════════════════════ */
+// ── Single invoice sheet — copy=true means "DUPLICATE" label ─────────────────
+function InvSheet({inv,logo,showEmptyFields,copy=false}){
+  const ef=!!showEmptyFields;
+  const C=calcInv(inv);
+  const cons=inv.sameC?inv.billing:(inv.consignee||inv.billing);
+  // number cells: right-align; label cells (HSN, Per): left-align for visual consistency
+  const tdBase={padding:'3px 5px',fontSize:'8.8pt',verticalAlign:'top'};
+  const tdL={...tdBase,textAlign:'left'};
+  const tdR={...tdBase,textAlign:'right'};
+  const tdC={...tdBase,textAlign:'center'};
+  const summRows=[
+    ['Taxable Value of Service / Goods',inr(C.tv)],
+    parseFloat(inv.rc)>0&&['Reverse Charges @ GST',inr(inv.rc)],
+    parseFloat(inv.ins)>0&&['Insurance Charges',inr(inv.ins)],
+    parseFloat(inv.fr)>0&&['Freight Charges',inr(inv.fr)],
+    ['Total Taxable Value',inr(C.gt)],
+    ...(inv.gst==='SC'?[['SGST @ 9%',inr(C.sg)],['CGST @ 9%',inr(C.cg)]]:inv.gst==='IG'?[['IGST @ 18%',inr(C.ig)]]:[] ),
+    ['Rounding Off (+ / -)',C.ro===0?'0.00':C.ro.toFixed(2)],
+    ['FINAL INVOICE AMOUNT','₹ '+inr(C.fin)],
+  ].filter(Boolean);
+
+  return(
+    <div className="invoice-container" style={{fontFamily:'Arial,Helvetica,sans-serif',fontSize:'9.5pt',
+      border:'1.5px solid #2c2c2c',padding:'10px 12px',lineHeight:1.45,color:'#000',background:'#fff'}}>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',
+        borderBottom:'2px solid #333',paddingBottom:'8px',marginBottom:'8px'}}>
+        <div style={{display:'flex',gap:'14px',alignItems:'flex-start',flex:1}}>
+          {logo&&(
+            <div style={{flexShrink:0,width:'88px',height:'88px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <img src={logo} style={{maxWidth:'88px',maxHeight:'88px',objectFit:'contain'}} alt="logo"/>
+            </div>
+          )}
+          <div>
+            <div style={{fontWeight:'bold',fontSize:'14pt',letterSpacing:'.01em'}}>{CO.name}</div>
+            <div style={{fontSize:'8.5pt',marginTop:'1px'}}>{CO.l1}, {CO.l2}</div>
+            <div style={{fontSize:'8pt',marginTop:'2px'}}>GSTIN: {CO.gstin}&nbsp;|&nbsp;PAN: {CO.pan}</div>
+            <div style={{fontSize:'7.5pt',marginTop:'1px',color:'#444'}}>Bank: {CO.bank}&nbsp;|&nbsp;A/c: {CO.acc}&nbsp;|&nbsp;IFSC: {CO.ifsc}&nbsp;|&nbsp;Branch: {CO.branch}</div>
+            <div style={{fontSize:'7.5pt',color:'#444'}}>✉ {CO.email}&nbsp;|&nbsp;☎ {CO.ph}&nbsp;|&nbsp;🌐 {CO.web}</div>
+          </div>
+        </div>
+        <div style={{textAlign:'right',flexShrink:0,paddingLeft:'12px'}}>
+          <div style={{fontWeight:'bold',fontSize:'16pt',letterSpacing:'.06em',color:'#111'}}>TAX INVOICE</div>
+          {/* ORIGINAL / DUPLICATE label */}
+          <div style={{fontSize:'8pt',fontWeight:'bold',marginTop:'4px',letterSpacing:'.1em',
+            color:copy?'#c00':'#555',
+            border:copy?'1.5px solid #c00':'1px solid #999',
+            borderRadius:'3px',padding:'1px 6px',display:'inline-block'}}>
+            {copy?'DUPLICATE':'ORIGINAL'}
+          </div>
+        </div>
+      </div>
+      {/* Meta */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'3px 14px',fontSize:'8.5pt',
+        borderBottom:'1px solid #bbb',paddingBottom:'6px',marginBottom:'6px'}}>
+        <div><b>Invoice No:</b>&nbsp;{inv.no||'—'}</div>
+        <div><b>Invoice Date:</b>&nbsp;{fmtD(inv.date)}</div>
+        <div><b>Order Ref:</b>&nbsp;{inv.method||'—'}</div>
+        <div><b>Order Date:</b>&nbsp;{fmtD(inv.oDate)}</div>
+        {inv.jobNo&&<div><b>{deriveRefLabel(inv.jobType||'Job',inv.customRefLabel)}:</b>&nbsp;{inv.jobNo}</div>}
+        {!inv.jobNo&&ef&&<div><b>{deriveRefLabel(inv.jobType||'Job',inv.customRefLabel)}:</b>&nbsp;{'—'}</div>}
+        {inv.poNo&&<div><b>{deriveRefLabel(inv.poType||'PO',inv.poCustomLabel)}:</b>&nbsp;{inv.poNo}</div>}
+        {!inv.poNo&&ef&&<div><b>{deriveRefLabel(inv.poType||'PO',inv.poCustomLabel)}:</b>&nbsp;{'—'}</div>}
+        <div><b>Vessel / Ship:</b>&nbsp;{inv.vessel||'—'}</div>
+        <div><b>Port of Service:</b>&nbsp;{inv.port||'—'}</div>
+        {inv.veh&&<div><b>Vehicle Regn.:</b>&nbsp;{inv.veh}</div>}
+        {!inv.veh&&ef&&<div><b>Vehicle Regn.:</b>&nbsp;{'—'}</div>}
+        {inv.ewNo&&<div><b>E-Way Bill:</b>&nbsp;{inv.ewNo}{inv.ewDt&&` dt. ${fmtD(inv.ewDt)}`}</div>}
+        {!inv.ewNo&&ef&&<div><b>E-Way Bill No:</b>&nbsp;{'—'}</div>}
+      </div>
+      {/* Parties */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',fontSize:'8.5pt',
+        borderBottom:'1px solid #bbb',paddingBottom:'6px',marginBottom:'6px'}}>
+        <div style={{paddingRight:'8px',borderRight:'1px solid #ddd'}}>
+          <div style={{fontWeight:'bold',fontSize:'7.5pt',color:'#555',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'3px'}}>Billed To / Receiver:</div>
+          <div style={{fontWeight:'bold',fontSize:'9.5pt'}}>{inv.billing?.name||'—'}</div>
+          {[inv.billing?.a1,inv.billing?.a2,inv.billing?.a3].filter(Boolean).map((l,i)=><div key={i}>{l}</div>)}
+          <div>{inv.billing?.city}{inv.billing?.state?`, ${inv.billing.state}`:''}{inv.billing?.code?` — ${inv.billing.code}`:''}</div>
+          {inv.billing?.gstin&&<div style={{marginTop:'2px'}}><b>GSTIN:</b>&nbsp;{inv.billing.gstin}</div>}
+        </div>
+        <div>
+          <div style={{fontWeight:'bold',fontSize:'7.5pt',color:'#555',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'3px'}}>Consignee / Shipped To:</div>
+          <div style={{fontWeight:'bold',fontSize:'9.5pt'}}>{cons?.name||'—'}</div>
+          {[cons?.a1,cons?.a2,cons?.a3].filter(Boolean).map((l,i)=><div key={i}>{l}</div>)}
+          <div>{cons?.city}{cons?.state?`, ${cons.state}`:''}{cons?.code?` — ${cons.code}`:''}</div>
+          {cons?.gstin&&<div style={{marginTop:'2px'}}><b>GSTIN:</b>&nbsp;{cons.gstin}</div>}
+        </div>
+      </div>
+      {/* Items — fixed layout, consistent column alignment */}
+      <table style={{width:'100%',tableLayout:'fixed',borderCollapse:'collapse',fontSize:'8.5pt',marginBottom:'6px'}}>
+        <colgroup>
+          <col style={{width:'4%'}}/><col style={{width:'30%'}}/><col style={{width:'9%'}}/>
+          <col style={{width:'6%'}}/><col style={{width:'10%'}}/><col style={{width:'5%'}}/>
+          <col style={{width:'12%'}}/><col style={{width:'9%'}}/><col style={{width:'15%'}}/>
+        </colgroup>
+        <thead>
+          <tr style={{borderTop:'1px solid #666',borderBottom:'1.5px solid #666',background:'#f5f5f5'}}>
+            <th style={{...tdC,fontWeight:'bold'}}>Sr.</th>
+            <th style={{...tdL,fontWeight:'bold'}}>Description of Goods / Service</th>
+            <th style={{...tdL,fontWeight:'bold'}}>HSN/SAC</th>
+            <th style={{...tdR,fontWeight:'bold'}}>Qty</th>
+            <th style={{...tdR,fontWeight:'bold'}}>Rate</th>
+            <th style={{...tdL,fontWeight:'bold'}}>Per</th>
+            <th style={{...tdR,fontWeight:'bold'}}>Amount (₹)</th>
+            <th style={{...tdR,fontWeight:'bold'}}>Disc. (₹)</th>
+            <th style={{...tdR,fontWeight:'bold'}}>Taxable Value (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(inv.items||[]).map((it,i)=>(
+            <tr key={it.id||i} style={{borderBottom:'0.5px solid #e4e4e4'}}>
+              <td style={tdC}>{it.sr||i+1}</td>
+              <td style={{...tdL,overflowWrap:'break-word'}}>{it.desc}</td>
+              <td style={tdL}>{it.hsn}</td>
+              <td style={tdR}>{it.qty}</td>
+              <td style={tdR}>{it.rate?inr(it.rate):''}</td>
+              <td style={tdL}>{it.per}</td>
+              <td style={tdR}>{inr(it.amount)}</td>
+              <td style={tdR}>{parseFloat(it.discount)?inr(it.discount):''}</td>
+              <td style={{...tdR,fontWeight:'bold'}}>{inr(it.taxable)}</td>
+            </tr>
+          ))}
+          {Array(Math.max(0,2-(inv.items||[]).length)).fill(0).map((_,i)=>(
+            <tr key={'e'+i}><td colSpan={9} style={{...tdBase,height:'22px'}}>&nbsp;</td></tr>
+          ))}
+        </tbody>
+      </table>
+      {/* Flex spacer — pushes footer to bottom in print */}
+      <div style={{flex:'1 1 auto'}}/>
+      {/* Footer — inside border */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 235px',gap:'10px',fontSize:'8.5pt',borderTop:'1px solid #ccc',paddingTop:'8px'}}>
+        <div>
+          {(inv.exRate&&inv.cur&&inv.cur!=='INR')&&(
+            <div style={{marginBottom:'6px',padding:'4px 8px',background:'#f9f9f9',border:'1px solid #e0e0e0',borderRadius:'4px'}}>
+              <b>Exchange Rate:</b>&nbsp;{inv.cur} 01.00 = ₹ {inv.exRate}
+            </div>
+          )}
+          <div style={{marginBottom:'5px',minHeight:'32px'}}>
+            {(inv.rmk||inv.rmkD)
+              ?<><b>Remarks:</b>&nbsp;
+                {inv.rmk&&inv.rmkD
+                  ?<span>{inv.rmk}&nbsp;—&nbsp;{inv.rmkD}</span>
+                  :<span>{inv.rmk||inv.rmkD}</span>
+                }</>
+              :(ef&&<><b>Remarks:</b>&nbsp;<span style={{color:'#999'}}>—</span></>)
+            }
+          </div>
+          <div style={{marginTop:'8px',paddingTop:'6px',borderTop:'1px solid #e0e0e0',fontSize:'7.5pt',color:'#555',lineHeight:1.6}}>
+            <div>1. Owner's I.Tax PAN: {CO.pan}</div>
+            <div>2. Queries: {CO.email}&nbsp;|&nbsp;{CO.ph}</div>
+          </div>
+          <div style={{marginTop:'10px',borderTop:'1px solid #e0e0e0',paddingTop:'6px',fontSize:'7.5pt',lineHeight:1.5}}>
+            <b>Declaration:</b> We declare that this invoice shows the actual price of the goods/service described and all particulars are true and correct. Computer generated — no signature required.
+          </div>
+        </div>
+        <div style={{paddingLeft:'10px',borderLeft:'1.5px solid #ccc'}}>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <tbody>
+              {summRows.map(([k,v],i)=>{
+                const last=i===summRows.length-1;
+                return(<tr key={k} style={last?{borderTop:'2px solid #333'}:{borderBottom:'0.5px solid #eee'}}>
+                  <td style={{padding:'3px 0',fontSize:last?'9pt':'7.8pt',fontWeight:last?'bold':'normal',color:last?'#000':'#555'}}>{k}</td>
+                  <td style={{padding:'3px 0',textAlign:'right',fontSize:last?'9pt':'7.8pt',fontWeight:last?'bold':'normal'}}>{v}</td>
+                </tr>);
+              })}
+            </tbody>
+          </table>
+          <div style={{marginTop:'6px',fontSize:'6.8pt',fontStyle:'italic',color:'#444',lineHeight:1.4,borderTop:'1px solid #e0e0e0',paddingTop:'5px'}}>
+            {toWords(C.fin)}
+          </div>
+          <div style={{marginTop:'22px',textAlign:'right',fontSize:'8.5pt'}}>
+            <div style={{fontWeight:'bold'}}>For, {CO.name}</div>
+            <div style={{marginTop:'24px',borderTop:'1px solid #888',paddingTop:'3px'}}>Authorised Signatory</div>
+            <div style={{fontSize:'7pt',color:'#666',marginTop:'1px'}}>E. &amp; O. E.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── InvPrint: single or duplicate (2-page) wrapper ────────────────────────────
+function InvPrint({inv,logo,showEmptyFields,duplicate=false}){
+  if(!duplicate) return(
+    <>
+      <InvSheet inv={inv} logo={logo} showEmptyFields={showEmptyFields} copy={false}/>
+      {/* SUBJECT TO outside border, centered below invoice */}
+      <div style={{textAlign:'center',fontSize:'7.5pt',fontWeight:'bold',
+        color:'#333',marginTop:'6px',letterSpacing:'.04em'}}>
+        SUBJECT TO LOCAL JURISDICTION ONLY
+      </div>
+    </>
+  );
+  return(
+    <>
+      {/* Page 1 — ORIGINAL */}
+      <div style={{pageBreakAfter:'always'}}>
+        <InvSheet inv={inv} logo={logo} showEmptyFields={showEmptyFields} copy={false}/>
+        <div style={{textAlign:'center',fontSize:'7.5pt',fontWeight:'bold',
+          color:'#333',marginTop:'6px',letterSpacing:'.04em'}}>
+          SUBJECT TO LOCAL JURISDICTION ONLY
+        </div>
+      </div>
+      {/* Page 2 — DUPLICATE */}
+      <div className="inv-page-break">
+        <InvSheet inv={inv} logo={logo} showEmptyFields={showEmptyFields} copy={true}/>
+        <div style={{textAlign:'center',fontSize:'7.5pt',fontWeight:'bold',
+          color:'#333',marginTop:'6px',letterSpacing:'.04em'}}>
+          SUBJECT TO LOCAL JURISDICTION ONLY
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   PRINT SUMMARY  — landscape A4, one page, all cols
+═══════════════════════════════════════════════ */
+function printSummary(invList,mF,yF){
+  const real=invList.filter(inv=>(inv.no||'').trim()&&(inv.billing?.name||'').trim());
+  if(!real.length){toast('No completed invoices to print.','info');return;}
+  const mn=MONTHS.find(m=>m.v===mF)?.l||'';
+  const title=mn&&yF?`${mn} ${yF}`:mn||yF||'All';
+  const genDate=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  let grandTotal=0;
+  const rows=real.map((inv,i)=>{
+    const C=calcInv(inv);grandTotal+=C.fin;
+    const bg=i%2===0?'#ffffff':'#f5f7ff';
+    return`<tr style="background:${bg}">
+      <td style="text-align:center;font-weight:600">${i+1}</td>
+      <td>${inv.no||'—'}</td>
+      <td>${fmtD(inv.date)||'—'}</td>
+      <td style="text-align:left">${inv.billing?.name||'—'}</td>
+      <td>${inv.billing?.gstin||'—'}</td>
+      <td style="text-align:left">${inv.vessel||'—'}</td>
+      <td style="text-align:left">${inv.port||'—'}</td>
+      <td>${inv.jobNo||'—'}</td>
+      <td>${inv.poNo||'—'}</td>
+      <td style="text-align:center">${inv.gst==='SC'?'SC':'IG'}</td>
+      <td style="text-align:right;font-weight:600">₹${inrI(C.fin)}</td>
+    </tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Invoice Summary — ${title}</title>
+<style>
+  @page{size:A4 landscape;margin:8mm}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:8.5pt;color:#000;background:#fff}
+  .hdr{background:#e8f0fb;padding:8px 12px;border-bottom:2px solid #1a3a6b;margin-bottom:8px}
+  .hdr h1{font-size:13pt;color:#1a3a6b;font-weight:bold}
+  .hdr p{font-size:7.5pt;color:#555;margin-top:2px}
+  .band{background:#1a3a6b;color:#fff;padding:5px 12px;font-size:9pt;font-weight:bold;margin-bottom:2px;display:flex;justify-content:space-between}
+  table{width:100%;border-collapse:collapse;font-size:8pt}
+  th{background:#1a3a6b;color:#fff;padding:5px 6px;text-align:center;font-size:7.5pt;font-weight:bold;white-space:nowrap;border:1px solid #0e2450}
+  td{padding:4px 6px;border-bottom:0.5px solid #ddd;border-right:0.5px solid #eee;vertical-align:top;white-space:nowrap}
+  td:nth-child(3),td:nth-child(5),td:nth-child(6){white-space:normal;word-break:break-word}
+  .total-row{background:#1a3a6b!important;color:#fff;font-weight:bold}
+  .total-row td{color:#fff;border-color:#0e2450;padding:6px}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<div class="hdr">
+  <h1>${CO.name}</h1>
+  <p>${CO.l1}, ${CO.l2} &nbsp;·&nbsp; GSTIN: ${CO.gstin} &nbsp;·&nbsp; ${CO.ph}</p>
+</div>
+<div class="band">
+  <span>INVOICE SUMMARY — ${title}</span>
+  <span>Generated: ${genDate} &nbsp;·&nbsp; ${real.length} Invoice${real.length!==1?'s':''}</span>
+</div>
+<table>
+  <thead><tr>
+    <th style="width:3%">Sr</th>
+    <th style="width:9%">Invoice No</th>
+    <th style="width:6%">Date</th>
+    <th style="width:15%">Party Name</th>
+    <th style="width:12%">GSTIN</th>
+    <th style="width:11%">Vessel / Ship</th>
+    <th style="width:10%">Port</th>
+    <th style="width:8%">Job / Ref</th>
+    <th style="width:8%">PO / Ref</th>
+    <th style="width:5%">GST</th>
+    <th style="width:8%">Amount (₹)</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr class="total-row">
+    <td colspan="10" style="text-align:right">GRAND TOTAL</td>
+    <td style="text-align:right">₹${inrI(grandTotal)}</td>
+  </tr></tfoot>
+</table>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups to print the summary.','info');
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORT MENU
+═══════════════════════════════════════════════ */
+function ExportMenu({filtered,mF,yF,fyF,enableFullExcel}){
+  const[open,setOpen]=useState(false);
+  const ref=useRef();
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
+  },[]);
+  const btnStyle={width:'100%',textAlign:'left',borderRadius:0,
+    padding:'10px 14px',fontSize:'13px',border:'none',borderBottom:'1px solid var(--border)',
+    display:'flex',alignItems:'center',gap:'8px'};
+  const btnStyleLast={...btnStyle,borderBottom:'none'};
+  return(
+    <div ref={ref} style={{position:'relative',flexShrink:0}}>
+      <button className="btn btn-ghost btn-sm" onClick={()=>setOpen(o=>!o)}
+        title="Export filtered invoices">⬆ Export ▾</button>
+      {open&&(
+        <div style={{position:'absolute',right:0,top:'calc(100% + 4px)',background:'var(--card)',
+          border:'1.5px solid var(--border2)',borderRadius:'var(--rl)',boxShadow:'var(--shadow-lg)',
+          zIndex:300,minWidth:'220px',overflow:'hidden'}}>
+
+          {/* Print Summary — landscape A4, one page */}
+          <button className="btn btn-ghost" style={btnStyle}
+            onClick={()=>{printSummary(filtered,fyF?'':mF,fyF?'FY '+fyF:yF);setOpen(false);}}
+            title="Print landscape summary — all invoices on one page">
+            🖨 Print Summary
+          </button>
+
+          {/* Summary Excel */}
+          <button className="btn btn-ghost" style={btnStyle}
+            onClick={()=>{exportExcel(filtered,fyF?'':mF,fyF?'FY '+fyF:yF);setOpen(false);}}>
+            📊 Export as Summary
+          </button>
+
+          {/* Full Report Excel — always visible */}
+          <button className="btn btn-ghost" style={btnStyle}
+            onClick={()=>{exportFullExcel(filtered,fyF?'':mF,fyF?'FY '+fyF:yF);setOpen(false);}}
+            title="Export all invoice fields — one row per item">
+            📋 Export as Report
+          </button>
+
+          {/* JSON backup */}
+          <button className="btn btn-ghost" style={btnStyleLast}
+            onClick={()=>{
+              let name='Invoice_All_Backup';
+              if(fyF)name=`Invoice_FY${fyF}_Backup`;
+              else if(mF&&yF){const mn=MONTHS.find(m=>m.v===mF)?.l||mF;name=`Invoice_${mn}-${yF}_Backup`;}
+              else if(yF)name=`Invoice_${yF}_Backup`;
+              else if(mF){const mn=MONTHS.find(m=>m.v===mF)?.l||mF;name=`Invoice_${mn}_Backup`;}
+              dlJSON({version:5,exported:new Date().toISOString(),invoices:filtered},name+'.json');
+              setOpen(false);
+            }}>
+            📦 Export as JSON (backup)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   LIST VIEW
+═══════════════════════════════════════════════ */
+function ListView({invs,onNew,onEdit,onView,onDel,onImport,onUndo,undoCount,onOpenSettings,showFiltTotal,enableFullExcel}){
+  const[q,setQ]=useState('');
+  const cm=today().slice(5,7),cy=today().slice(0,4);
+  const[mF,setMF]=useState(cm);
+  const[yF,setYF]=useState(cy);
+  const[fyF,setFyF]=useState('');  // fiscal year filter e.g. '20-21'
+  const[noStor]=useState(()=>!ls.ok());
+
+  const years=useMemo(()=>{
+    const s=new Set(invs.map(i=>i.date?.slice(0,4)).filter(Boolean));s.add(cy);
+    return[...s].sort((a,b)=>b-a);
+  },[invs,cy]);
+
+  // Derive all fiscal years present in data, sorted newest first
+  const fiscalYears=useMemo(()=>{
+    const s=new Set(invs.map(i=>fiscalYearStr(i.date)).filter(Boolean));
+    return[...s].sort((a,b)=>b.localeCompare(a));
+  },[invs]);
+
+  // When FY filter changes, clear month+year filters (mutually exclusive)
+  function setFY(v){
+    setFyF(v);
+    if(v){setMF('');setYF('');}
+  }
+  // When month or year filter changes, clear FY filter
+  function setMonth(v){setMF(v);if(v)setFyF('');}
+  function setYear(v){setYF(v);if(v)setFyF('');}
+
+  const filtered=useMemo(()=>{
+    let l=[...invs].sort((a,b)=>{
+      // Sort newest first by date, then by invoice no desc
+      const da=a.date||'',db=b.date||'';
+      if(db!==da)return db.localeCompare(da);
+      return(b.no||'').localeCompare(a.no||'');
+    });
+    if(fyF)l=l.filter(i=>fiscalYearStr(i.date)===fyF);
+    else{
+      if(mF)l=l.filter(i=>i.date?.slice(5,7)===mF);
+      if(yF)l=l.filter(i=>i.date?.slice(0,4)===yF);
+    }
+    if(q){const lq=q.toLowerCase();l=l.filter(i=>(i.no+' '+(i.billing?.name||'')+' '+(i.vessel||'')+' '+(i.port||'')+' '+(i.jobNo||'')).toLowerCase().includes(lq));}
+    return l;
+  },[invs,mF,yF,fyF,q]);
+
+  const filtTotal=filtered.reduce((s,i)=>s+(calcInv(i).fin||0),0);
+
+  // Filtered Total is only meaningful when scoped to a single period (not multi-year)
+  // A specific month, a specific year, or a FY all count as "single period"
+  const filtTotalPeriodOk=!!(fyF||(mF&&mF!=='')||( yF&&yF!==''));
+  // Show warning label if enabled but no period selected
+  const filtTotalDisplay=showFiltTotal
+    ?(filtTotalPeriodOk?'₹ '+inrI(filtTotal):'Select a period')
+    :null;
+
+  // Stats: Total Invoices + Filtered count always shown; Filtered Total only if enabled
+  const statCards=[
+    ['Total Invoices',invs.length],
+    ['Filtered',filtered.length],
+    ...(showFiltTotal?[['Filtered Total',filtTotalDisplay]]:[] ),
+  ];
+
+  return(
+    <div style={{padding:'1.5rem 2rem',maxWidth:'1240px',margin:'0 auto'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1.4rem',flexWrap:'wrap',gap:'10px'}}>
+        <div>
+          <h1 style={{fontSize:'22px',fontWeight:800,letterSpacing:'-.01em',marginBottom:'2px'}}>{CO.name}</h1>
+          <div style={{fontSize:'12px',color:'var(--text3)'}}>GST Invoice Manager&nbsp;·&nbsp;GSTIN:&nbsp;<span style={{fontFamily:'monospace'}}>{CO.gstin}</span></div>
+        </div>
+        <div style={{display:'flex',gap:'7px',flexWrap:'wrap',alignItems:'center'}}>
+          <button className="btn btn-ghost btn-sm" onClick={onUndo} disabled={undoCount===0}
+            title={`Undo last action (${undoCount} available)`}>↩ Undo{undoCount>0?` (${undoCount})`:''}</button>
+          <button className="btn btn-ghost btn-sm" onClick={onImport} title="Import JSON backup or Excel (.xlsx/.xlsm)">⬇ Import</button>
+          <button className="btn btn-ghost btn-sm" onClick={onOpenSettings}>⚙ Settings</button>
+          <button className="btn btn-primary" onClick={onNew} style={{padding:'8px 18px',fontSize:'14px'}}>＋ New Invoice</button>
+        </div>
+      </div>
+
+      {noStor&&<div className="alert alert-warn">⚠ localStorage unavailable — data won't persist between sessions.</div>}
+
+      {/* Stats */}
+      <div style={{display:'grid',gridTemplateColumns:`repeat(${statCards.length},1fr)`,gap:'12px',marginBottom:'1.25rem'}}>
+        {statCards.map(([l,v])=>(
+          <div key={l} className="stat-card">
+            <div style={{fontSize:'11px',fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'5px'}}>{l}</div>
+            <div style={{
+              fontSize: v==='Select a period'?'12px':'20px',
+              fontWeight:700,
+              fontFamily:'monospace',
+              color: v==='Select a period'?'var(--warn)':'inherit',
+            }}>{v}</div>
+            {v==='Select a period'&&<div style={{fontSize:'10px',color:'var(--text4)',marginTop:'2px',fontFamily:'sans-serif',fontWeight:400}}>Pick a month, year, or FY</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Filters row */}
+      <div style={{display:'flex',gap:'9px',marginBottom:'12px',flexWrap:'wrap',alignItems:'center'}}>
+        <select value={mF} onChange={e=>setMonth(e.target.value)} style={{width:'150px',flexShrink:0,opacity:fyF?0.45:1,transition:'opacity .15s'}}>
+          {MONTHS.map(m=><option key={m.v} value={m.v}>{m.l}</option>)}
+        </select>
+        <select value={yF} onChange={e=>setYear(e.target.value)} style={{width:'110px',flexShrink:0,opacity:fyF?0.45:1,transition:'opacity .15s'}}>
+          <option value="">All Years</option>
+          {years.map(y=><option key={y} value={y}>{y}</option>)}
+        </select>
+        {/* Fiscal Year divider + dropdown */}
+        <div style={{display:'flex',alignItems:'center',gap:'7px',flexShrink:0}}>
+          <span style={{color:'var(--text4)',fontSize:'12px',userSelect:'none',paddingLeft:'2px'}}>FY</span>
+          <select value={fyF} onChange={e=>setFY(e.target.value)}
+            style={{width:'108px',flexShrink:0,
+              fontWeight:fyF?700:400,
+              color:fyF?'var(--accent)':'var(--text)',
+              borderColor:fyF?'var(--accent)':'var(--border)'}}>
+            <option value="">All FY</option>
+            {fiscalYears.map(fy=><option key={fy} value={fy}>FY {fy}</option>)}
+          </select>
+        </div>
+        <div style={{flex:1,minWidth:'200px',position:'relative'}}>
+          <span style={{position:'absolute',left:'11px',top:'50%',transform:'translateY(-50%)',color:'var(--text3)',pointerEvents:'none',fontSize:'13px'}}>🔍</span>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search no, party, vessel, port, job no…" style={{paddingLeft:'33px'}}/>
+        </div>
+        <ExportMenu filtered={filtered} mF={mF} yF={yF} fyF={fyF} enableFullExcel={enableFullExcel}/>
+        {(mF||yF||fyF||q)&&<button className="btn btn-ghost btn-sm" onClick={()=>{setMF('');setYF('');setFyF('');setQ('');}}>✕ Clear</button>}
+      </div>
+
+      {/* Table */}
+      {filtered.length===0?(
+        <div style={{textAlign:'center',padding:'4rem 2rem',background:'var(--bg2)',borderRadius:'var(--rl)',color:'var(--text3)',border:'2px dashed var(--border)'}}>
+          {invs.length===0?<><div style={{fontSize:'44px',marginBottom:'12px'}}>🧾</div>
+            <div style={{fontSize:'16px',fontWeight:700}}>No invoices yet</div>
+            <div style={{fontSize:'13px',marginTop:'6px'}}>Click "+ New Invoice" or import your Excel file to get started</div></>
+          :'No invoices match your current filters.'}
+        </div>
+      ):(
+        <div style={{background:'var(--card)',border:'1.5px solid var(--border)',borderRadius:'var(--rl)',overflow:'hidden',boxShadow:'var(--shadow)'}}>
+          <table className="dtbl">
+            <thead><tr>
+              {['Invoice No','Date','Party Name','Vessel','Port','Job No.','Amount (₹)','Actions'].map(h=><th key={h}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {filtered.map(inv=>{
+                const{fin}=calcInv(inv);
+                return(
+                  <tr key={inv.id} onClick={()=>onView(inv)}>
+                    <td><span style={{color:'var(--accent)',fontWeight:700,fontFamily:'monospace',fontSize:'12px'}}>{inv.no||'—'}</span></td>
+                    <td style={{color:'var(--text2)',fontSize:'12px',whiteSpace:'nowrap'}}>{fmtD(inv.date)}</td>
+                    <td style={{maxWidth:'185px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:500}}>{inv.billing?.name||'—'}</td>
+                    <td style={{maxWidth:'150px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--text2)',fontSize:'12px'}}>{inv.vessel||'—'}</td>
+                    <td style={{color:'var(--text2)',fontSize:'12px',maxWidth:'130px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{inv.port||'—'}</td>
+                    <td style={{color:'var(--text2)',fontSize:'12px'}}>{inv.jobNo||'—'}</td>
+                    <td style={{fontWeight:700,textAlign:'right',fontFamily:'monospace',fontSize:'13px',whiteSpace:'nowrap'}}>{inrI(fin)}</td>
+                    <td onClick={e=>e.stopPropagation()} style={{width:'100px'}}>
+                      <div style={{display:'flex',gap:'4px',justifyContent:'flex-end'}}>
+                        <button className="btn btn-ghost btn-xs" onClick={()=>onEdit(inv)} title="Edit">✎</button>
+                        <button className="btn btn-danger btn-xs" onClick={()=>onDel(inv.id)} title="Delete">✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{padding:'9px 14px',borderTop:'1px solid var(--border)',fontSize:'12px',color:'var(--text3)',display:'flex',justifyContent:'space-between'}}>
+            <span>{filtered.length} invoice{filtered.length!==1?'s':''} shown</span>
+            {showFiltTotal&&filtTotalPeriodOk&&<span style={{fontWeight:700}}>Total: ₹ {inrI(filtTotal)}</span>}
+          </div>
+        </div>
+      )}
+      <div style={{marginTop:'2.5rem',textAlign:'center',fontSize:'11px',color:'var(--text4)',paddingBottom:'1rem'}}>
+        <a href="https://github.com/meetpalan-dev" target="_blank" rel="noreferrer"
+          style={{color:'var(--text4)',textDecoration:'none'}} title="Developer: Meet Palan">
+          Company Invoice Invoice App
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   FORM VIEW
+═══════════════════════════════════════════════ */
+function FormView({inv:init,onSave,onCancel,parties,ships,descs}){
+  // Migrate legacy invoice fields for backward compat
+  const migrateInv=raw=>{
+    const inv=JSON.parse(JSON.stringify(raw));
+    // Legacy: jobType='' or undefined → default to 'Job'
+    if(!inv.jobType)inv.jobType='Job';
+    // Legacy: poType='WO' remains valid (deriveRefLabel handles it)
+    if(!inv.poType)inv.poType='PO';
+    // Legacy: customRef/customRefLabel moved — jobType was 'Custom' → jobNo held the value
+    // Nothing to migrate since storage was separate
+    // Ensure no undefined fields
+    if(!inv.cur)inv.cur='USD';
+    return inv;
+  };
+  const[inv,setInv]=useState(()=>migrateInv(init));
+  const C=useMemo(()=>calcInv(inv),[inv]);
+  const sf=(f,v)=>setInv(p=>({...p,[f]:v}));
+  const formRef=useRef();
+
+  // Enter key: jump to next field. Buttons skipped. Plain textareas (remarks) allow native Enter.
+  // AC-wrapped textareas (description) also navigate on Enter.
+  function handleFormKeyDown(e){
+    if(e.key!=='Enter')return;
+    const tag=e.target.tagName;
+    // Buttons handle their own Enter
+    if(tag==='BUTTON')return;
+    // Plain textareas (remarks etc) keep native Enter (newline) - but NOT AC-wrapped ones
+    if(tag==='TEXTAREA'&&!e.target.closest('.ac-wrap'))return;
+    e.preventDefault();
+    // Only input/select/textarea in focusable - buttons excluded so Enter never jumps to Add Row
+    const focusable=Array.from(
+      formRef.current.querySelectorAll('input,select,textarea')
+    ).filter(el=>!el.disabled&&el.type!=='hidden'&&el.type!=='checkbox'&&el.tabIndex>=0&&el.closest('.no-print')===null);
+    const idx=focusable.indexOf(e.target);
+    if(idx>=0&&idx<focusable.length-1){
+      focusable[idx+1].focus();
+      if(focusable[idx+1].select)focusable[idx+1].select();
+    }
+  }
+
+  function setBilling(v){
+    const isGj=v.code==='24'||v.state?.toLowerCase().includes('gujarat');
+    setInv(p=>({...p,billing:v,gst:isGj?'SC':'IG'}));
+  }
+  function updItem(idx,field,v){
+    setInv(p=>{
+      const items=[...p.items];
+      const it={...items[idx],[field]:v};
+      if(!['amount','taxable','discount'].includes(field)){
+        const q2=parseFloat(it.qty)||0,r2=parseFloat(it.rate)||0;
+        if(q2&&r2)it.amount=parseFloat((q2*r2).toFixed(2));
+      }
+      const a=parseFloat(it.amount)||0,d=parseFloat(it.discount)||0;
+      it.taxable=parseFloat(Math.max(0,a-d).toFixed(2));
+      items[idx]=it;return{...p,items};
+    });
+  }
+  const addItem=()=>setInv(p=>({...p,items:[...p.items,{...blankItem(),sr:p.items.length+1}]}));
+  const delItem=i=>setInv(p=>({...p,items:p.items.filter((_,j)=>j!==i)}));
+  const td={padding:'4px 3px'};
+
+  return(
+    <div ref={formRef} onKeyDown={handleFormKeyDown} style={{maxWidth:'990px',margin:'0 auto',padding:'0 1rem 2.5rem'}}>
+      {/* Sticky bar */}
+      <div className="no-print" style={{position:'sticky',top:'44px',zIndex:10,background:'var(--bg)',borderBottom:'1.5px solid var(--border)',padding:'10px 0',marginBottom:'16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
+        <h2 style={{fontSize:'16px',fontWeight:700,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          Tax Invoice&nbsp;<span style={{color:'var(--text3)',fontWeight:400,fontSize:'14px'}}>{inv.no||'— New Draft'}</span>
+        </h2>
+        <div style={{display:'flex',gap:'6px',flexShrink:0}}>
+          <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary btn-sm" onClick={()=>onSave(inv)}>Save &amp; Preview →</button>
+        </div>
+      </div>
+
+      {/* Invoice Details */}
+      <div className="card">
+        <div className="sec-title">Invoice Details</div>
+        <div className="g3">
+          <div><label className="lbl">Invoice No *</label>
+            <input value={inv.no||''} onChange={e=>sf('no',e.target.value)} placeholder="001/04/26-27 (auto)" style={{fontFamily:'monospace'}}/>
+          </div>
+          <div><label className="lbl">Invoice Date *</label>
+            <input type="date" value={inv.date||''} onChange={e=>sf('date',e.target.value)}/>
+          </div>
+          <div><label className="lbl">Order Date</label>
+            <input type="date" value={inv.oDate||''} onChange={e=>sf('oDate',e.target.value)}/>
+          </div>
+          <div><label className="lbl">Order Method</label>
+            <SmartSelect value={inv.method||''} options={METHODS} onChange={v=>sf('method',v)} placeholder="— Select Method —"/>
+          </div>
+          <div className="sp2"><label className="lbl">Port of Service</label>
+            <SmartSelect value={inv.port||''} options={PORTS} onChange={v=>sf('port',v)} placeholder="— Select Port —"/>
+          </div>
+
+          {/* Ref fields — each spans 1.5 cols naturally in a 2-col sub-grid */}
+          <div>
+            <label className="lbl">Reference 1 (Job / Appt)</label>
+            <RefField
+              typeOptions={REF_TYPE_OPTIONS}
+              typeValue={inv.jobType||'Job'}
+              onTypeChange={v=>setInv(p=>({...p,jobType:v}))}
+              value={inv.jobNo||''}
+              onValueChange={v=>sf('jobNo',v)}
+              customLabel={inv.customRefLabel||''}
+              onCustomLabelChange={v=>sf('customRefLabel',v)}
+              placeholder={inv.jobType==='Appointment'?'e.g. INIXY-00084A':inv.jobType==='PO'?'PO number':'e.g. CA00208347'}
+            />
+          </div>
+
+          <div>
+            <label className="lbl">Reference 2 (PO / WO)</label>
+            <RefField
+              typeOptions={REF_TYPE_OPTIONS}
+              typeValue={inv.poType||'PO'}
+              onTypeChange={v=>setInv(p=>({...p,poType:v}))}
+              value={inv.poNo||''}
+              onValueChange={v=>sf('poNo',v)}
+              customLabel={inv.poCustomLabel||''}
+              onCustomLabelChange={v=>sf('poCustomLabel',v)}
+              placeholder={inv.poType==='Job'?'Job number':inv.poType==='Appointment'?'e.g. INIXY-00088A':'PO / WO number'}
+            />
+          </div>
+
+          <div className="sp2"><label className="lbl">Vessel / Ship Name</label>
+            <ACInput value={inv.vessel||''} suggestions={ships} minLen={2} placeholder="A/c. Master - m.t. VESSEL NAME"
+              onChange={v=>sf('vessel',v)} onSelect={v=>sf('vessel',v)}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Billing */}
+      <div className="card">
+        <div className="sec-title">Billing Party — Billed To</div>
+        <PartyForm p={inv.billing} onChange={setBilling} parties={parties}/>
+      </div>
+
+      {/* Consignee */}
+      <div className="card">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
+          <div className="sec-title" style={{marginBottom:0}}>Consignee — Shipped To</div>
+          <label style={{fontSize:13,display:'flex',alignItems:'center',gap:7,cursor:'pointer',fontWeight:600}}>
+            <input type="checkbox" checked={inv.sameC} onChange={e=>sf('sameC',e.target.checked)}/>
+            Same as billing party
+          </label>
+        </div>
+        {inv.sameC
+          ?<div style={{color:'var(--text3)',fontSize:13,fontStyle:'italic'}}>Consignee will match billing party on the invoice.</div>
+          :<PartyForm p={inv.consignee||blankParty()} onChange={v=>sf('consignee',v)} parties={parties}/>
+        }
+      </div>
+
+      {/* Items */}
+      <div className="card">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
+          <div className="sec-title" style={{marginBottom:0}}>Service / Goods Items</div>
+          <button className="btn btn-ghost btn-sm" onClick={addItem}>＋ Add Row</button>
+        </div>
+        <div style={{overflowX:'auto',marginBottom:'8px'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:'12px',minWidth:'730px'}}>
+            <thead>
+              <tr style={{background:'var(--bg3)'}}>
+                {['Sr','Description','HSN/SAC','Qty','Rate','Per','Amount','Discount','Taxable Val.',''].map(h=>(
+                  <th key={h} style={{padding:'7px 5px',textAlign:['Amount','Discount','Taxable Val.'].includes(h)?'right':'left',
+                    fontWeight:700,color:'var(--text3)',borderBottom:'2px solid var(--border)',fontSize:'11px',whiteSpace:'nowrap'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {inv.items.map((it,idx)=>(
+                <tr key={it.id||idx} style={{borderBottom:'1px solid var(--border)'}}>
+                  <td style={{...td,width:'30px'}}><input value={it.sr||''} onChange={e=>updItem(idx,'sr',e.target.value)} style={{width:'26px',padding:'4px 3px',textAlign:'center'}}/></td>
+                  <td style={{...td,minWidth:'210px'}}>
+                    <ACInput value={it.desc||''} suggestions={descs} minLen={1} rows={2}
+                      placeholder="Description of goods / service…"
+                      onChange={v=>updItem(idx,'desc',v)} onSelect={v=>updItem(idx,'desc',v)}/>
+                  </td>
+                  <td style={{...td,width:'66px'}}><input value={it.hsn||''} onChange={e=>updItem(idx,'hsn',e.target.value)} style={{width:'62px',padding:'4px 4px'}}/></td>
+                  <td style={{...td,width:'62px'}}><input value={it.qty||''} onChange={e=>updItem(idx,'qty',e.target.value)} style={{width:'58px',padding:'4px 4px'}}/></td>
+                  <td style={{...td,width:'80px'}}><input type="number" value={it.rate||''} onChange={e=>updItem(idx,'rate',e.target.value)} style={{width:'76px',padding:'4px 4px'}}/></td>
+                  <td style={{...td,width:'47px'}}><input value={it.per||''} onChange={e=>updItem(idx,'per',e.target.value)} placeholder="MT" style={{width:'43px',padding:'4px 3px'}}/></td>
+                  <td style={{...td,width:'88px'}}><input type="number" value={it.amount||''} onChange={e=>updItem(idx,'amount',e.target.value)} style={{width:'84px',padding:'4px 4px'}}/></td>
+                  <td style={{...td,width:'76px'}}><input type="number" value={it.discount||''} onChange={e=>updItem(idx,'discount',e.target.value)} style={{width:'72px',padding:'4px 4px'}}/></td>
+                  <td style={{...td,textAlign:'right',fontWeight:700,width:'88px',whiteSpace:'nowrap',paddingRight:'8px'}}>₹{inr(it.taxable)}</td>
+                  <td style={{...td,width:'24px'}}>
+                    {inv.items.length>1&&<button onClick={()=>delItem(idx)}
+                      style={{background:'none',border:'none',color:'var(--danger)',fontSize:'18px',lineHeight:1,cursor:'pointer',padding:'0 2px'}}>×</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{textAlign:'right',fontWeight:700,color:'var(--text2)',paddingRight:'8px',fontSize:13}}>
+          Sub-Total:&nbsp;<span style={{color:'var(--accent)',fontSize:'16px',fontFamily:'monospace'}}>₹{inr(C.tv)}</span>
+        </div>
+      </div>
+
+      {/* Tax */}
+      <div className="g2">
+        <div className="card">
+          <div className="sec-title">Additional Charges</div>
+          <div style={{display:'grid',gap:'10px'}}>
+            <div><label className="lbl">Reverse Charges @ GST (₹)</label><input type="number" value={inv.rc||''} onChange={e=>sf('rc',e.target.value)} placeholder="0"/></div>
+            <div><label className="lbl">Insurance Charges (₹)</label><input type="number" value={inv.ins||''} onChange={e=>sf('ins',e.target.value)} placeholder="0"/></div>
+            <div><label className="lbl">Freight Charges (₹)</label><input type="number" value={inv.fr||''} onChange={e=>sf('fr',e.target.value)} placeholder="0"/></div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="sec-title">Tax &amp; Currency</div>
+          <div style={{marginBottom:'12px'}}>
+            <label className="lbl">GST Type</label>
+            <select value={inv.gst||''} onChange={e=>sf('gst',e.target.value)} style={{fontWeight:600}}>
+              <option value="" disabled>— Select GST Type —</option>
+              <option value="SC">SGST 9% + CGST 9% — Intra-state (Gujarat)</option>
+              <option value="IG">IGST 18% — Inter-state</option>
+              <option value="NL">NIL GST — Exempt / Export</option>
+            </select>
+          </div>
+          <div className="g2">
+            <div><label className="lbl">Currency</label><SmartSelect value={inv.cur||''} options={CURRENCIES} onChange={v=>sf('cur',v)} placeholder="— Select —"/></div>
+            <div><label className="lbl">Exchange Rate (₹ / 1 {inv.cur||'USD'})</label>
+              <input type="number" value={inv.exRate||''} onChange={e=>{
+                const v=e.target.value;
+                sf('exRate',v);
+                // Auto-set USD if exchange rate entered and currency is INR
+                if(v&&parseFloat(v)>1&&(inv.cur==='INR'||!inv.cur)){
+                  setInv(p=>({...p,exRate:v,cur:'USD'}));
+                }
+              }} placeholder="e.g. 84.50"/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="card" style={{background:'var(--bg3)',border:'1.5px solid var(--border2)'}}>
+        <div className="sec-title">Invoice Summary</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(118px,1fr))',gap:'14px 22px',marginBottom:'14px'}}>
+          {[['Taxable Value','₹'+inr(C.gt),false],
+            inv.gst==='SC'&&['SGST 9%','₹'+inr(C.sg),false],
+            inv.gst==='SC'&&['CGST 9%','₹'+inr(C.cg),false],
+            inv.gst==='IG'&&['IGST 18%','₹'+inr(C.ig),false],
+            ['Rounding Off',C.ro===0?'±0.00':C.ro.toFixed(2),false],
+            ['Final Amount','₹'+inrI(C.fin),true],
+          ].filter(Boolean).map(([k,v,hi])=>(
+            <div key={k}>
+              <div style={{fontSize:'11px',fontWeight:700,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'4px'}}>{k}</div>
+              <div style={{fontSize:hi?'22px':'15px',fontWeight:hi?800:500,color:hi?'var(--accent)':'var(--text)',fontFamily:'monospace'}}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{padding:'9px 13px',background:'var(--accent-lt)',borderRadius:'var(--r)',fontSize:'12px',color:'var(--accent-txt)',fontStyle:'italic'}}>
+          {toWords(C.fin)}
+        </div>
+      </div>
+
+      {/* Extra */}
+      <div className="card">
+        <div className="sec-title">Additional Details</div>
+        <div className="g3" style={{marginBottom:'12px'}}>
+          <div><label className="lbl">E-Way Bill No</label><input value={inv.ewNo||''} onChange={e=>sf('ewNo',e.target.value)} placeholder="12-digit number"/></div>
+          <div><label className="lbl">E-Way Bill Date</label><input type="date" value={inv.ewDt||''} onChange={e=>sf('ewDt',e.target.value)}/></div>
+          <div><label className="lbl">Vehicle Regn. No</label><input value={inv.veh||''} onChange={e=>sf('veh',e.target.value)} placeholder="GJ 03 BV 6942"/></div>
+        </div>
+        <div className="g2">
+          <div><label className="lbl">Remarks — Heading</label><input value={inv.rmk||''} onChange={e=>sf('rmk',e.target.value)} placeholder="e.g. EXCHANGE RATE"/></div>
+          <div><label className="lbl">Remarks — Details</label><input value={inv.rmkD||''} onChange={e=>sf('rmkD',e.target.value)} placeholder="Further details"/></div>
+        </div>
+      </div>
+
+      <div style={{display:'flex',justifyContent:'flex-end',gap:'8px',paddingTop:'4px'}}>
+        <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary" style={{padding:'9px 26px',fontSize:'14px'}} onClick={()=>onSave(inv)}>Save &amp; Preview →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   PREVIEW VIEW
+═══════════════════════════════════════════════ */
+function PreviewView({inv,onBack,onEdit,logo,showEmptyFields}){
+  const C=calcInv(inv);
+  const[err,setErr]=useState('');
+  const[duplicate,setDuplicate]=useState(false);
+  function safeName(){
+    const vessel=(inv.vessel||'').trim();
+    if(vessel){
+      const v=vessel.replace(/[^a-zA-Z0-9 _\-]/g,'').trim().replace(/\s+/g,' ');
+      return`${v} Invoice`;
+    }
+    const no=(inv.no||'Draft').replace(/[^a-zA-Z0-9_\-]/g,'_').replace(/_+/g,'_');
+    return`Invoice_${no}`;
+  }
+  function doPrint(){
+    const el=document.getElementById('print-area');
+    if(!el)return;
+    const parent=el.parentNode;
+    const sibling=el.nextSibling;
+    document.body.appendChild(el);
+    const p=document.title;
+    document.title=safeName();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      window.print();
+      setTimeout(()=>{
+        document.title=p;
+        parent.insertBefore(el,sibling);
+      },2500);
+    }));
+  }
+
+  return(
+    <div>
+      <div className="no-print" style={{padding:'10px 2rem',display:'flex',alignItems:'center',gap:'8px',
+        borderBottom:'1.5px solid var(--border)',background:'var(--bg)',position:'sticky',top:'44px',zIndex:10,flexWrap:'wrap'}}>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={onEdit}>✎ Edit</button>
+        <button className="btn btn-ghost btn-sm" onClick={doPrint}>🖨 Print</button>
+        {/* Duplicate checkbox */}
+        <label style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',
+          padding:'4px 10px',borderRadius:'var(--r)',fontSize:'12px',fontWeight:600,
+          border:`1.5px solid ${duplicate?'var(--danger)':'var(--border2)'}`,
+          background:duplicate?'var(--danger-bg)':'transparent',
+          color:duplicate?'var(--danger)':'var(--text2)',
+          transition:'all .15s',userSelect:'none'}}>
+          <input type="checkbox" checked={duplicate} onChange={e=>setDuplicate(e.target.checked)}
+            style={{accentColor:'var(--danger)',width:'auto',cursor:'pointer'}}/>
+          📋 Duplicate
+        </label>
+        {duplicate&&<span style={{fontSize:'11px',color:'var(--text3)',fontStyle:'italic'}}>2 pages: Original + Duplicate</span>}
+        {err&&<span style={{color:'var(--danger)',fontSize:'12px'}}>{err}</span>}
+        <span style={{marginLeft:'auto',fontSize:'12px',color:'var(--text2)'}}>
+          <span style={{fontFamily:'monospace',fontWeight:700,color:'var(--accent)'}}>{inv.no||'Draft'}</span>
+          &nbsp;·&nbsp;{inv.billing?.name||'—'}
+          &nbsp;·&nbsp;<b style={{fontSize:'14px'}}>₹ {inrI(C.fin)}</b>
+        </span>
+      </div>
+      <div id="preview-wrap" style={{padding:'2rem',background:'var(--bg3)',minHeight:'calc(100vh - 100px)'}}>
+        <div style={{maxWidth:'875px',margin:'0 auto',background:'#fff',
+          boxShadow:'0 4px 28px rgba(0,0,0,.2)',borderRadius:'4px'}}>
+          <div id="print-area" style={{padding:'18px 20px'}}>
+            <InvPrint inv={inv} logo={logo} showEmptyFields={showEmptyFields} duplicate={duplicate}/>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   APP ROOT
+═══════════════════════════════════════════════ */
+function App(){
+  const[dark,setDark]=useState(()=>ls.get(K.THEME,false));
+  // Start with localStorage data immediately (synchronous), then upgrade from IDB
+  // ── Pre-loaded invoice data (correct dates + all 179 invoices) ──
+  const SEED_INVS=[];
+  const[invs,setInvs]=useState(()=>{
+    const stored=ls.get(K.INVS,[])||[];
+    // Use stored data if it already has correct dates (not all today)
+    if(stored.length>0){
+      const allToday=stored.every(inv=>inv.date===new Date().toISOString().slice(0,10));
+      if(!allToday) return stored.map(sanitizeInv);
+    }
+    // Seed with correct data — save to storage so IDB sync picks it up
+    ls.set(K.INVS,SEED_INVS);
+    return SEED_INVS.map(sanitizeInv);
+  });
+
+  // On mount: load from IDB (may have more data than localStorage if ls was cleared)
+  useEffect(()=>{
+    idb.get(K.INVS,[]).then(idbData=>{
+      if(!idbData||!idbData.length)return;
+      const today=new Date().toISOString().slice(0,10);
+      const idbCorrupted=idbData.length>0&&idbData.every(inv=>inv.date===today);
+      if(idbCorrupted)return; // discard IDB data with all-today dates
+      const lsData=ls.get(K.INVS,[])||[];
+      // Use IDB data if it has more invoices (more complete)
+      if(idbData.length>lsData.length){
+        setInvs(idbData.map(sanitizeInv));
+        ls.set(K.INVS,idbData);// sync back to ls
+      }
+    }).catch(()=>{});
+  },[]);
+  const[xParties,setXParties]=useState(()=>ls.get(K.PARTIES,[]));
+  const[xShips,setXShips]=useState(()=>ls.get(K.SHIPS,[]));
+  const[xDescs,setXDescs]=useState(()=>ls.get(K.DESCS,[]));
+  const[logo,setLogo]=useState(()=>ls.get(K.LOGO,'')||'');
+  const[view,setView]=useState('list');
+  const[cur,setCur]=useState(null);
+  const[showSettings,setShowSettings]=useState(false);
+  const[fsFileName,setFsFileName]=useState(()=>ls.get(K.FSFILE,'')||'');
+  const[history,setHistory]=useState([]);
+  const[showFiltTotal,setShowFiltTotal]=useState(()=>ls.get(K.SHOW_FTOTAL,false));
+  const[showEmptyFields,setShowEmptyFields]=useState(()=>ls.get(K.SHOW_EMPTY_FIELDS,false));
+  const[enableFullExcel,setEnableFullExcel]=useState(()=>ls.get(K.FULL_EXCEL,false));
+  const[dateFmt,setDateFmtState]=useState(()=>{const f=ls.get(K.DATE_FMT,'DMY');_dateFmt=f;return f;});
+  const toasts=useToast();
+  const doSetDateFmt=useCallback(f=>{setDateFmt(f);setDateFmtState(f);},[]);
+
+  // Unified suggestion pools — merge in-app + imported data
+  const allParties=useMemo(()=>{
+    const m={};
+    [...extractParties(invs),...xParties].forEach(p=>{if(p?.name)m[p.gstin||p.name]={...p};});
+    return Object.values(m);
+  },[invs,xParties]);
+
+  const allShips=useMemo(()=>[...new Set([
+    ...extractShips(invs),
+    ...(xShips||[]).map(s=>String(s||'').trim()).filter(s=>s.length>2),
+  ])],[invs,xShips]);
+  const allDescs=useMemo(()=>{
+    // Priority: 1. Default predefined list, 2. User-learned from in-app invoices
+    // Do NOT use xDescs (old imported Excel descriptions)
+    const learnedFromInvoices=extractDescs(invs);
+    // Merge: defaults first, then learned — deduplicated, case-insensitive
+    const seen=new Set(DEFAULT_DESCS.map(d=>d.toUpperCase()));
+    const learned=learnedFromInvoices.filter(d=>!seen.has(d.toUpperCase()));
+    // Also include xDescs that are user-created (stored in v2 key = clean learned data only)
+    const extraLearned=(xDescs||[]).map(d=>String(d||'').trim()).filter(d=>d.length>=3&&!seen.has(d.toUpperCase()));
+    return[...DEFAULT_DESCS,...learned,...extraLearned];
+  },[invs,xDescs]);
+
+  // Global keyboard shortcuts
+  useEffect(()=>{
+    const h=e=>{
+      // Ignore when typing in an input/textarea/select
+      if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+      if(e.key==='n'&&view==='list'){doNew();}
+      if(e.key==='Escape'&&view!=='list'){setView('list');}
+    };
+    window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);
+  },[view]);
+
+  function persistInvs(list){
+    // 1. localStorage (fast, synchronous — always first)
+    ls.set(K.INVS,list);
+    // 2. IndexedDB (durable, survives storage pressure)
+    idb.set(K.INVS,list).catch(()=>{});
+    // 3. File-system linked file (optional, if user set it up in Settings)
+    fsSave({version:5,exported:new Date().toISOString(),invoices:list}).catch(()=>{});
+  }
+  async function pickFile(){
+    const ok=await fsPick({version:5,exported:new Date().toISOString(),invoices:invs});
+    if(ok){const n=_fsH?.name||'invoices.json';setFsFileName(n);ls.set(K.FSFILE,n);toast('File linked — auto-save enabled!','success');}
+    else toast('File link cancelled or unsupported in this browser.','info');
+  }
+  function pushHist(snap){setHistory(h=>[...h.slice(-4),JSON.parse(JSON.stringify(snap))]);}
+  function saveInvs(list){pushHist(invs);setInvs(list);persistInvs(list);}
+
+  function doUndo(){
+    if(!history.length)return;
+    const prev=history[history.length-1];
+    setHistory(h=>h.slice(0,-1));
+    setInvs(prev);persistInvs(prev);
+    toast(`Undo: restored ${prev.length} invoice(s).`,'info');
+  }
+  function onLogoChange(data){setLogo(data);ls.set(K.LOGO,data);}
+  const toggleDark=()=>setDark(d=>{ls.set(K.THEME,!d);return!d;});
+  const toggleFiltTotal=()=>setShowFiltTotal(v=>{ls.set(K.SHOW_FTOTAL,!v);return!v;});
+  const toggleShowEmptyFields=()=>setShowEmptyFields(v=>{ls.set(K.SHOW_EMPTY_FIELDS,!v);return!v;});
+  const toggleFullExcel=()=>setEnableFullExcel(v=>{ls.set(K.FULL_EXCEL,!v);return!v;});
+  const doNew=()=>{setCur(newInv(invs));setView('form');};
+  const doEdit=inv=>{setCur(JSON.parse(JSON.stringify(inv)));setView('form');};
+  const doView=inv=>{setCur(inv);setView('preview');};
+  const doDel=id=>{
+    if(!window.confirm('Delete this invoice? Use Undo to restore.'))return;
+    saveInvs(invs.filter(i=>i.id!==id));
+    toast('Deleted. Use ↩ Undo to restore.','info');
+  };
+  const doSave=inv=>{
+    const cleanedInv=sanitizeInv(inv);
+    const list=invs.find(i=>i.id===cleanedInv.id)?invs.map(i=>i.id===cleanedInv.id?cleanedInv:i):[...invs,cleanedInv];
+    saveInvs(list);
+    setCur(cleanedInv);
+    setView('preview');
+    toast('Invoice saved!','success');
+  };
+  const doClearAll=()=>{saveInvs([]);setShowSettings(false);toast('All invoices cleared.','info');};
+
+  // Unified import: JSON, or Excel (both parties/ships AND full invoice conversion)
+  const doImport=()=>{
+    const inp=document.createElement('input');
+    inp.type='file';inp.accept='.json,.xlsx,.xlsm,.xls';
+    inp.onchange=async e=>{
+      const f=e.target.files[0];if(!f)return;
+      const ext=f.name.split('.').pop().toLowerCase();
+
+      if(ext==='json'){
+        const r=new FileReader();
+        r.onload=ev=>{
+          try{
+            const data=JSON.parse(ev.target.result);
+            // Handles both formats:
+            //   {version:5, invoices:[...]}  ← Invoice_Backup_YYYY-MM-DD.json
+            //   [{id:..., no:...}, ...]       ← raw array
+            const imported=(Array.isArray(data)?data:(data.invoices||[])).map(sanitizeInv);
+            if(!imported.length)throw new Error('No invoices found in file');
+            const isBackup=!Array.isArray(data)&&data.version&&data.exported;
+            const label=isBackup?`backup from ${data.exported?.slice(0,10)||'?'}`:'JSON file';
+            if(!window.confirm(`Import ${imported.length} invoice(s) from ${label}?\nWill MERGE with your existing ${invs.length} invoice(s). Duplicates are skipped.`))return;
+            const merged=[...invs];
+            imported.forEach(ni=>{if(!merged.find(ex=>ex.id===ni.id))merged.push(ni);});
+            saveInvs(merged);
+            toast(`✓ Imported ${imported.length} invoices from ${label}. Total: ${merged.length}.`,'success');
+          }catch(err){toast('Import failed: '+err.message,'error');}
+        };
+        r.readAsText(f);
+      } else {
+        // Excel: import from Full Export format (generated by this app)
+        try{
+          toast('Reading Excel file…','info');
+          const xlInvs=await xlsxToInvoices(f);
+
+          // Extract suggestions from imported invoices
+          const newParties=extractParties(xlInvs);
+          const newShips=extractShips(xlInvs);
+          const newDescs=extractDescs(xlInvs);
+
+          // Merge suggestion pools
+          const pm={};[...xParties,...newParties].forEach(p=>{if(p?.name)pm[p.gstin||p.name]={...p};});
+          const mergedP=Object.values(pm);ls.set(K.PARTIES,mergedP);setXParties(mergedP);
+          const mergedS=[...new Set([...xShips,...newShips])];ls.set(K.SHIPS,mergedS);setXShips(mergedS);
+          const mergedD=[...new Set([...xDescs,...newDescs])];ls.set(K.DESCS,mergedD);setXDescs(mergedD);
+
+          if(xlInvs.length>0){
+            if(!window.confirm(`Found ${xlInvs.length} invoice(s) in Excel. Import and merge with existing ${invs.length}?`))return;
+            const merged=[...invs];
+            xlInvs.forEach(ni=>{
+              const dup=merged.find(ex=>ex.no&&ex.no===ni.no&&ex.date===ni.date);
+              if(!dup)merged.push(ni);
+            });
+            saveInvs(merged);
+            toast(`Imported: ${xlInvs.length} invoices, ${newParties.length} parties, ${newShips.length} vessels.`,'success');
+          } else {
+            toast('No invoices found. Make sure you import a Full Export (.xlsx) file from this app.','info');
+          }
+        }catch(err){toast('Excel import failed: '+err.message,'error');console.error(err);}
+      }
+    };
+    inp.click();
+  };
+
+  return(
+    <div className={dark?'dark':''} style={{minHeight:'100vh',background:'var(--bg)',color:'var(--text)',transition:'background .22s,color .22s'}}>
+      {/* Nav */}
+      <div className="no-print" style={{background:'var(--bg2)',borderBottom:'1.5px solid var(--border)',
+        padding:'0 2rem',display:'flex',alignItems:'center',justifyContent:'space-between',
+        height:'44px',position:'sticky',top:0,zIndex:50,boxShadow:'var(--shadow)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+          {logo&&<img src={logo} style={{height:'28px',width:'auto',objectFit:'contain'}} alt="logo"/>}
+          <span style={{fontWeight:900,fontSize:'15px',letterSpacing:'-.01em',color:'var(--accent)'}}>INV</span>
+          <span style={{color:'var(--border2)',fontSize:'20px',lineHeight:1,opacity:.5}}>|</span>
+          <span style={{fontSize:'13px',fontWeight:600,color:'var(--text2)'}}>Invoice App</span>
+          {view!=='list'&&<span style={{fontSize:'12px',color:'var(--text3)'}}>› {view==='form'?'Edit':'Preview'}</span>}
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={toggleDark} style={{fontSize:'12px'}}>
+          {dark?'☀ Light':'🌙 Dark'}
+        </button>
+      </div>
+
+      {view==='list'&&<ListView invs={invs} onNew={doNew} onEdit={doEdit} onView={doView}
+        onDel={doDel} onImport={doImport}
+        onUndo={doUndo} undoCount={history.length} onOpenSettings={()=>setShowSettings(true)}
+        showFiltTotal={showFiltTotal} enableFullExcel={enableFullExcel}/>}
+      {view==='form'&&<FormView inv={cur} onSave={doSave} onCancel={()=>setView('list')}
+        parties={allParties} ships={allShips} descs={allDescs}/>}
+      {view==='preview'&&<PreviewView inv={cur} onBack={()=>setView('list')} onEdit={()=>doEdit(cur)} logo={logo} showEmptyFields={showEmptyFields}/>}
+
+      {showSettings&&<SettingsModal onClose={()=>setShowSettings(false)} invs={invs}
+        onClearAll={doClearAll} fsFileName={fsFileName} onPickFile={pickFile}
+        logo={logo} onLogoChange={onLogoChange}
+        showFiltTotal={showFiltTotal} onToggleFiltTotal={toggleFiltTotal}
+        showEmptyFields={showEmptyFields} onToggleShowEmptyFields={toggleShowEmptyFields}
+        enableFullExcel={enableFullExcel} onToggleFullExcel={toggleFullExcel}
+        dateFmt={dateFmt} onDateFmt={doSetDateFmt}
+        onImportBackup={doImport}/>}
+
+      <div className="toast-wrap">
+        {toasts.map(t=>(
+          <div key={t.id} className={`toast toast-${t.type==='error'?'error':t.type==='success'?'success':'info'}`}>
+            {t.type==='success'?'✓ ':t.type==='error'?'✕ ':'ℹ '}{t.msg}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
