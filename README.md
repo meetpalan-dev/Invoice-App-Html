@@ -55,6 +55,13 @@ The result: one `.html` file. Download it. Open it. Done.
 - Configurable date format: `DD/MM/YYYY` or `YYYY-MM-DD`
 - Fully responsive — works on mobile and tablet
 
+<img width="1920" height="982" alt="image" src="https://github.com/user-attachments/assets/e8970590-488a-4476-855b-05527ab748f3" />
+<img width="1920" height="984" alt="image" src="https://github.com/user-attachments/assets/a9992e5c-cf6b-4847-882e-6da567be27a5" />
+<img width="1920" height="985" alt="image" src="https://github.com/user-attachments/assets/ed0c1809-d871-490c-805e-c51078046b57" />
+<img width="1920" height="979" alt="image" src="https://github.com/user-attachments/assets/f061a7c4-30cc-4bea-9c79-08ae76527992" />
+
+
+
 ### 📡 Offline
 - Service Worker caches CDN scripts on first load
 - After that, works **completely offline**
